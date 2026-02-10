@@ -1,0 +1,18 @@
+# Build artifacts
+*.o
+webserv
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files
+/tmp/
+test_uploads/
