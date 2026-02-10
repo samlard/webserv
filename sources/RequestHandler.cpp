@@ -145,21 +145,28 @@ bool RequestHandler::deleteFile(const std::string& path) {
 }
 
 std::string RequestHandler::resolvePath(const std::string& uri) {
-	// Find matching location
-	std::string root = "./www";
-	for (std::map<std::string, std::string>::const_iterator it = _config.locations.begin();
-		 it != _config.locations.end(); ++it) {
-		if (uri.find(it->first) == 0) {
-			root = it->second;
-			break;
-		}
-	}
-	
-	// Remove query string
+	// Remove query string first
 	std::string path = uri;
 	size_t query = path.find('?');
 	if (query != std::string::npos)
 		path = path.substr(0, query);
+	
+	// Find matching location
+	std::string root = "./www";
+	std::string location_prefix;
+	for (std::map<std::string, std::string>::const_iterator it = _config.locations.begin();
+		 it != _config.locations.end(); ++it) {
+		if (path.find(it->first) == 0) {
+			root = it->second;
+			location_prefix = it->first;
+			break;
+		}
+	}
+	
+	// Remove location prefix from path if it's not "/"
+	if (!location_prefix.empty() && location_prefix != "/") {
+		path = path.substr(location_prefix.length());
+	}
 	
 	return root + path;
 }

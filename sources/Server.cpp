@@ -178,7 +178,13 @@ void Server::processRequest(Client* client) {
 	
 	// Check if CGI request
 	if (handler.isCgiRequest(request.getUri())) {
-		std::string script_path = "./www" + request.getUri();
+		// Remove query string from path for script execution
+		std::string uri = request.getUri();
+		size_t query_pos = uri.find('?');
+		if (query_pos != std::string::npos)
+			uri = uri.substr(0, query_pos);
+		
+		std::string script_path = "./www" + uri;
 		cgi_handler.handle(request, response, script_path);
 	} else {
 		handler.handle(request, response);
