@@ -169,7 +169,8 @@ void Server::handleClientWrite(int fd) {
 }
 
 void Server::processRequest(Client* client) {
-	const ServerConfig& server_config = _config.getServers()[0]; // Simplified
+	// TODO: Select server config based on port/Host header for proper virtual host support
+	const ServerConfig& server_config = _config.getServers()[0]; // Using first config for now
 	RequestHandler handler(server_config);
 	CgiHandler cgi_handler(server_config);
 	

@@ -52,22 +52,31 @@ bool CgiHandler::executeCgi(const std::string& script_path,
 		std::string interpreter = findCgiInterpreter(script_path);
 		std::vector<std::string> env = buildEnv(request, script_path);
 		
-		// Convert env to char* array
+		// Convert env to char* array (copy strings to ensure lifetime)
 		char** envp = new char*[env.size() + 1];
 		for (size_t i = 0; i < env.size(); ++i) {
-			envp[i] = const_cast<char*>(env[i].c_str());
+			envp[i] = new char[env[i].size() + 1];
+			std::strcpy(envp[i], env[i].c_str());
 		}
 		envp[env.size()] = NULL;
 		
-		// Execute CGI
-		char* argv[] = {
-			const_cast<char*>(interpreter.c_str()),
-			const_cast<char*>(script_path.c_str()),
-			NULL
-		};
+		// Execute CGI (copy strings to ensure lifetime)
+		char* interp_copy = new char[interpreter.size() + 1];
+		char* script_copy = new char[script_path.size() + 1];
+		std::strcpy(interp_copy, interpreter.c_str());
+		std::strcpy(script_copy, script_path.c_str());
 		
-		execve(interpreter.c_str(), argv, envp);
-		exit(1); // execve failed
+		char* argv[] = { interp_copy, script_copy, NULL };
+		
+		execve(interp_copy, argv, envp);
+		
+		// If execve fails, clean up and exit
+		delete[] interp_copy;
+		delete[] script_copy;
+		for (size_t i = 0; i < env.size(); ++i)
+			delete[] envp[i];
+		delete[] envp;
+		exit(1);
 	}
 	
 	// Parent process
