@@ -1,0 +1,2 @@
+This is a test file for GET requests.
+WebServ C++98 HTTP Server is working correctly!
