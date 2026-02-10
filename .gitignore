@@ -1,0 +1,9 @@
+# Build artifacts
+*.o
+webserv
+
+# Temporary files
+/tmp/*
+
+# Directories
+www/

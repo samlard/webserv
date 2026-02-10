@@ -192,8 +192,6 @@ void Server::handleClientWrite(int fd) {
 }
 
 void Server::handleCGIRead(int fd) {
-    std::cout << "handleCGIRead called for fd " << fd << std::endl;
-    
     // Find which client this CGI belongs to
     int clientFd = -1;
     CGIHandler* cgi = NULL;
@@ -207,13 +205,10 @@ void Server::handleCGIRead(int fd) {
         }
     }
     
-    if (!cgi) {
-        std::cerr << "CGI not found for fd " << fd << std::endl;
+    if (!cgi)
         return;
-    }
     
     cgi->readFromStdout();
-    std::cout << "After readFromStdout, isDone=" << cgi->isDone() << std::endl;
     
     // Check if CGI is done
     if (cgi->isDone()) {
@@ -401,7 +396,6 @@ void Server::run() {
                         i++;
                     } else if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
                         // Error/hangup on CGI pipe
-                        std::cerr << "Got POLLERR/POLLHUP/POLLNVAL on fd " << pfd.fd << std::endl;
                         
                         // Find which CGI this belongs to FIRST (before closing pipes)
                         int clientFd = -1;
@@ -419,21 +413,15 @@ void Server::run() {
                         // POLLHUP means pipe closed - try to read any remaining data first
                         if (cgi && pfd.fd == cgi->getStdoutFd()) {
                             // Try to read any remaining data
-                            std::cerr << "Reading remaining data from stdout..." << std::endl;
                             cgi->readFromStdout();
                         }
                         
                         // Remove this pipe from poll
                         _pollfds.erase(_pollfds.begin() + i);
                         
-                        std::cerr << "After handling POLLHUP, checking isDone..." << std::endl;
-                        
                         // Check if CGI is done
                         if (cgi && cgi->isDone()) {
-                            std::cerr << "CGI is done, calling handleCGICompletion" << std::endl;
                             handleCGICompletion(clientFd, cgi);
-                        } else {
-                            std::cerr << "CGI not done yet, cgi=" << cgi << std::endl;
                         }
                         
                         // Don't increment i since we removed an element

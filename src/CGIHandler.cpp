@@ -318,14 +318,11 @@ bool CGIHandler::readFromStdout() {
     char buffer[4096];
     ssize_t bytesRead = read(_pipeOut[0], buffer, sizeof(buffer));
     
-    std::cerr << "readFromStdout: bytesRead=" << bytesRead << std::endl;
-    
     if (bytesRead == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             return false; // Would block, try again later
         
         // Error occurred
-        std::cerr << "Error reading from stdout: " << strerror(errno) << std::endl;
         close(_pipeOut[0]);
         _pipeOut[0] = -1;
         return true;
@@ -333,14 +330,12 @@ bool CGIHandler::readFromStdout() {
     
     if (bytesRead == 0) {
         // EOF
-        std::cerr << "EOF on stdout" << std::endl;
         close(_pipeOut[0]);
         _pipeOut[0] = -1;
         return true;
     }
     
     _responseData.append(buffer, bytesRead);
-    std::cerr << "Read " << bytesRead << " bytes, total response size: " << _responseData.length() << std::endl;
     return true;
 }
 
@@ -355,12 +350,8 @@ bool CGIHandler::isDone() const {
             self->_running = false;
             if (WIFEXITED(status))
                 self->_exitStatus = WEXITSTATUS(status);
-            std::cerr << "CGI process exited with status " << self->_exitStatus << std::endl;
         }
     }
-    
-    std::cerr << "isDone check: _running=" << _running << ", _stdinClosed=" << _stdinClosed 
-              << ", _pipeOut[0]=" << _pipeOut[0] << std::endl;
     
     // Done when child exited, stdin closed, and stdout read
     return !_running && _stdinClosed && (_pipeOut[0] == -1);
