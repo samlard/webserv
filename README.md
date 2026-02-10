@@ -50,16 +50,28 @@ The parser uses a state machine with the following states:
 
 ## Building
 
+Build both the test suite and example programs:
+
 ```bash
 make
 ```
 
+This will create:
+- `test_parser` - Comprehensive test suite
+- `example_usage` - Usage examples demonstrating real-world scenarios
+
 ## Testing
 
-Run the comprehensive test suite:
+Run the comprehensive test suite with 14 test cases:
 
 ```bash
 ./test_parser
+```
+
+Run the usage examples to see the parser in action:
+
+```bash
+./example_usage
 ```
 
 The test suite includes 14 tests covering:
@@ -71,6 +83,15 @@ The test suite includes 14 tests covering:
 - Various error conditions
 - All three HTTP methods (GET, POST, DELETE)
 - HTTP/1.0 and HTTP/1.1
+
+The usage examples demonstrate:
+- Simulated socket reads with various chunk sizes
+- GET requests with query parameters
+- POST requests with JSON bodies
+- Chunked transfer encoding with automatic unchunking
+- DELETE requests with authentication headers
+- Error handling for malformed requests
+- Body size limit enforcement
 
 ## Usage Example
 
