@@ -1,0 +1,16 @@
+# Build artifacts
+obj/
+*.o
+webserv_parser
+test_parser
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
