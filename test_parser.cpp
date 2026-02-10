@@ -10,7 +10,7 @@ void printRequest(const HttpRequest& req)
     std::cout << "Version: " << req.getVersion() << std::endl;
     std::cout << "Headers:" << std::endl;
     
-    std::map<std::string, std::string> headers = req.getHeaders();
+    const std::map<std::string, std::string>& headers = req.getHeaders();
     for (std::map<std::string, std::string>::const_iterator it = headers.begin();
          it != headers.end(); ++it) {
         std::cout << "  " << it->first << ": " << it->second << std::endl;

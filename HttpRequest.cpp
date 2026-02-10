@@ -312,6 +312,13 @@ size_t HttpRequest::hexToSize(const std::string& hex)
 {
     size_t result = 0;
     
+    // Limit hex string length to prevent overflow
+    // size_t max value is at least 2^32-1, represented as 8 hex digits
+    // Allow up to 16 hex digits for 64-bit size_t
+    if (hex.length() > 16) {
+        return static_cast<size_t>(-1);
+    }
+    
     for (size_t i = 0; i < hex.length(); i++) {
         char c = hex[i];
         int digit = -1;
@@ -323,6 +330,11 @@ size_t HttpRequest::hexToSize(const std::string& hex)
         } else if (c >= 'A' && c <= 'F') {
             digit = 10 + (c - 'A');
         } else {
+            return static_cast<size_t>(-1);
+        }
+        
+        // Check for overflow before multiplication
+        if (result > (static_cast<size_t>(-1) / 16)) {
             return static_cast<size_t>(-1);
         }
         
