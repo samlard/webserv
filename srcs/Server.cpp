@@ -278,11 +278,19 @@ void Server::handleGET(Client& client, const ServerConfig& serverConfig) {
 	
 	// Determine root directory
 	std::string root = serverConfig.root;
-	if (location && !location->root.empty())
+	std::string path = uri;
+	
+	if (location && !location->root.empty()) {
 		root = location->root;
+		// Remove location path from URI for this location
+		if (Utils::startsWith(uri, location->path))
+			path = uri.substr(location->path.length());
+		if (path.empty())
+			path = "/";
+	}
 	
 	// Build file path
-	std::string filepath = Utils::joinPath(root, uri);
+	std::string filepath = Utils::joinPath(root, path);
 	filepath = Utils::normalizePath(filepath);
 	
 	// Check for CGI
