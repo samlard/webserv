@@ -1,0 +1,10 @@
+*.o
+*.a
+webserv
+*.swp
+*.swo
+*~
+.DS_Store
+*.dSYM/
+www/uploads/*
+!www/uploads/.gitkeep
