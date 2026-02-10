@@ -159,15 +159,13 @@ void Server::handleClientWrite(Client& client) {
             client.state = DONE;
             closeClient(client.fd);
         }
-    } else if (bytes_sent == 0) {
-        // Connection closed
-        closeClient(client.fd);
     } else {
-        // Error occurred
+        // Error occurred (bytes_sent < 0) or would block
         if (errno != EAGAIN && errno != EWOULDBLOCK) {
             std::cerr << "Write error to fd=" << client.fd << ": " << strerror(errno) << std::endl;
             closeClient(client.fd);
         }
+        // If EAGAIN/EWOULDBLOCK, just return and wait for next POLLOUT
     }
 }
 

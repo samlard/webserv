@@ -16,11 +16,15 @@ echo
 
 # Test 2: Multiple concurrent connections
 echo "Test 2: Multiple concurrent connections (10 requests)"
-SUCCESS=0
+PIDS=()
 for i in {1..10}; do
-    curl -s http://localhost:8080/ > /dev/null && ((SUCCESS++)) &
+    curl -s http://localhost:8080/ > /dev/null &
+    PIDS+=($!)
 done
-wait
+SUCCESS=0
+for pid in "${PIDS[@]}"; do
+    wait $pid && ((SUCCESS++))
+done
 if [ $SUCCESS -eq 10 ]; then
     echo "✓ PASS: All 10 concurrent requests succeeded"
 else
