@@ -102,12 +102,10 @@ int main()
             "Host: api.example.com\r\n"
             "Transfer-Encoding: chunked\r\n"
             "\r\n"
-            "1a\r\n"
+            "18\r\n"
             "This is the first chunk.\r\n"
-            "\r\n"
-            "1b\r\n"
+            "19\r\n"
             "This is the second chunk.\r\n"
-            "\r\n"
             "0\r\n"
             "\r\n";
         
