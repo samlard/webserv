@@ -1,0 +1,18 @@
+# Build artifacts
+*.o
+webserv
+
+# Test files
+*.log
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+_codeql_detected_source_root
