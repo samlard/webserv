@@ -1,5 +1,6 @@
 *.o
 *.out
 test_parser
+example_usage
 *.dSYM/
 .DS_Store

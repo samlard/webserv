@@ -1,23 +1,33 @@
 CXX = c++
 CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -pedantic
-NAME = test_parser
+TEST = test_parser
+EXAMPLE = example_usage
 
-SRCS = HttpRequest.cpp test_parser.cpp
-OBJS = $(SRCS:.cpp=.o)
+PARSER_SRCS = HttpRequest.cpp
+PARSER_OBJS = $(PARSER_SRCS:.cpp=.o)
 
-all: $(NAME)
+TEST_SRCS = test_parser.cpp
+TEST_OBJS = $(TEST_SRCS:.cpp=.o)
 
-$(NAME): $(OBJS)
-	$(CXX) $(CXXFLAGS) -o $(NAME) $(OBJS)
+EXAMPLE_SRCS = example_usage.cpp
+EXAMPLE_OBJS = $(EXAMPLE_SRCS:.cpp=.o)
+
+all: $(TEST) $(EXAMPLE)
+
+$(TEST): $(PARSER_OBJS) $(TEST_OBJS)
+	$(CXX) $(CXXFLAGS) -o $(TEST) $(PARSER_OBJS) $(TEST_OBJS)
+
+$(EXAMPLE): $(PARSER_OBJS) $(EXAMPLE_OBJS)
+	$(CXX) $(CXXFLAGS) -o $(EXAMPLE) $(PARSER_OBJS) $(EXAMPLE_OBJS)
 
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(OBJS)
+	rm -f $(PARSER_OBJS) $(TEST_OBJS) $(EXAMPLE_OBJS)
 
 fclean: clean
-	rm -f $(NAME)
+	rm -f $(TEST) $(EXAMPLE)
 
 re: fclean all
 
