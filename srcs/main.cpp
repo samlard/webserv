@@ -43,6 +43,6 @@ int main(int argc, char** argv) {
 	std::cout << "Server started successfully" << std::endl;
 	server.run();
 	
-	std::cout << "Server stopped" << std::endl;
+	// std::cout << "Server stopped" << std::endl;
 	return 0;
 }
