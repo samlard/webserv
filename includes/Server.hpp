@@ -13,13 +13,13 @@ class Server {
 		void run();
 
 	private :
-		private:
-    	int _listenSocket;                    // Socket d'écoute principal
-    	std::vector<int> _clientSockets;      // Tous les sockets clients connectés
-    	fd_set _masterSet;                    // Pour select()
-    	int _maxFd;                           // Plus grand fd pour select()
-    	Config _config;                       // Copie de la config (ports, routes...)
-    	bool _running;
+		// private:
+    	// int _listenSocket;                    // Socket d'écoute principal
+    	// std::vector<int> _clientSockets;      // Tous les sockets clients connectés
+    	// fd_set _masterSet;                    // Pour select()
+    	// int _maxFd;                           // Plus grand fd pour select()
+    	// Config _config;                       // Copie de la config (ports, routes...)
+    	// bool _running;
 };
 
 

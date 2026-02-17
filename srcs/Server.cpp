@@ -12,7 +12,8 @@ void Server::shutdown(){
 }
 
 int Server::init(Config &config) {
-
+	(void)config;
+	return 0;
 }
 
 void Server::run(){
