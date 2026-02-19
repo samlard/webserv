@@ -3,6 +3,12 @@
 
 #include "Config.hpp"
 #include <vector> 
+#include <sys/socket.h>
+#include <fcntl.h>
+#include <netinet/in.h> 
+#include <arpa/inet.h>
+#include <sys/select.h>
+
 
 class Server {
 	public :
@@ -13,6 +19,10 @@ class Server {
 		void run();
 
 	private :
+    	int _listenSocket;        // ← Stocke le socket d'écoute
+    	fd_set _masterSet;        // ← Ensemble pour select()
+    	int _maxFd;               // ← Plus grand descripteur
+    	bool _running;            // ← Pour la boucle run()
 		// private:
     	// int _listenSocket;                    // Socket d'écoute principal
     	// std::vector<int> _clientSockets;      // Tous les sockets clients connectés
