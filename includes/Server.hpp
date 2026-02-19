@@ -8,6 +8,13 @@
 #include <netinet/in.h> 
 #include <arpa/inet.h>
 #include <sys/select.h>
+#include <iostream>
+#include <map>
+#include <string>
+#include <poll.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <cstring>
 
 
 class Server {

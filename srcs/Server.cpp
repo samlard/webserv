@@ -1,5 +1,7 @@
 #include "../includes/Server.hpp"
 
+#define BUFFER_SIZE 4096
+
 Server::Server() {
 }
 
@@ -49,4 +51,144 @@ int Server::init(Config &config) {
 
 void Server::run(){
 
+
+    std::vector<pollfd> fds;
+    std::map<int, Client> clients;
+
+    // fds.push_back({server1, POLLIN, 0});
+    // fds.push_back({server2, POLLIN, 0});
+
+    while (true) {
+
+        // nettoyage zombies CGI
+        while (waitpid(-1, NULL, WNOHANG) > 0);
+
+        poll(fds.data(), fds.size(), -1);
+
+        for (size_t i = 0; i < fds.size(); ++i) {
+
+            int fd = fds[i].fd;
+
+            // === NOUVELLE CONNEXION ===
+            if (fds[i].revents & POLLIN) {
+
+                if (fd == server1 || fd == server2) {
+
+                    int client_fd = accept(fd, NULL, NULL);
+                    if (client_fd < 0) continue;
+
+                    make_nonblocking(client_fd);
+
+                    fds.push_back({client_fd, POLLIN, 0});
+                    clients.insert(std::make_pair(
+                        client_fd,
+                        Client(client_fd, fd)
+                    ));
+
+                } else {
+                    // === CLIENT EXISTANT ENVOIE DATA ===
+
+                    char buffer[BUFFER_SIZE];
+                    int bytes = recv(fd, buffer, BUFFER_SIZE, 0);
+
+                    if (bytes <= 0) {
+                        close(fd);
+                        fds.erase(fds.begin() + i);
+                        clients.erase(fd);
+                        --i;
+                        continue;
+                    }
+
+                    Client &c = clients[fd];
+                    c.request.append(buffer, bytes);
+
+                    // vérifier fin headers
+                    size_t pos;
+                    if (!c.headers_parsed &&
+                        (pos = c.request.find("\r\n\r\n")) != std::string::npos) {
+
+                        c.headers_parsed = true;
+
+                        std::string headers = c.request.substr(0, pos + 4);
+
+                        // parser Content-Length si besoin
+                        size_t cl = headers.find("Content-Length:");
+                        if (cl != std::string::npos) {
+                            size_t end = headers.find("\r\n", cl);
+                            c.expected_body = std::stoi(
+                                headers.substr(cl + 15, end - (cl + 15))
+                            );
+                        }
+
+                        // si pas de body → prêt à traiter
+                        if (c.expected_body == 0) {
+
+                            // === ICI TU FERAS FORK + EXEC ===
+                            // fork();
+                            // execve();
+                            // récupérer sortie CGI via pipe
+
+                            c.response =
+                                "HTTP/1.1 200 OK\r\n"
+                                "Content-Length: 5\r\n\r\nHello";
+
+                            fds[i].events |= POLLOUT;
+                        }
+                    }
+
+                    // si body attendu
+                    if (c.headers_parsed && c.expected_body > 0) {
+
+                        size_t body_start =
+                            c.request.find("\r\n\r\n") + 4;
+
+                        if (c.request.size() - body_start
+                            >= c.expected_body) {
+
+                            std::string body =
+                                c.request.substr(body_start,
+                                                 c.expected_body);
+
+                            // === ICI TU FERAS FORK + EXEC ===
+                            // fork();
+                            // execve();
+                            // passer body à CGI via pipe
+
+                            c.response =
+                                "HTTP/1.1 200 OK\r\n"
+                                "Content-Length: 2\r\n\r\nOK";
+
+                            fds[i].events |= POLLOUT;
+                        }
+                    }
+                }
+            }
+
+            // === ENVOI REPONSE ===
+            if (fds[i].revents & POLLOUT) {
+
+                Client &c = clients[fd];
+
+                int sent = send(fd,
+                                c.response.c_str(),
+                                c.response.size(),
+                                0);
+
+                if (sent > 0)
+                    c.response.erase(0, sent);
+
+                if (c.response.empty()) {
+                    fds[i].events &= ~POLLOUT;
+                }
+            }
+
+            // === ERREUR / HANGUP ===
+            if (fds[i].revents & (POLLHUP | POLLERR)) {
+                close(fd);
+                fds.erase(fds.begin() + i);
+                clients.erase(fd);
+                --i;
+            }
+        }
+    }
 }
