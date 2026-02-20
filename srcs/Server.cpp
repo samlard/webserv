@@ -25,8 +25,7 @@ int Server::init(Config &config) {
         perror("socket");
         return 1;
     }
-    std::cout << "coucou" << std::endl;
-    
+
     // 2. NON-BLOQUANT (identique)
     fcntl(_listenSocket, F_SETFL, O_NONBLOCK);
     
@@ -50,7 +49,6 @@ int Server::init(Config &config) {
         close(_listenSocket);
         return 1;
     }
-        std::cout << "coucou1" << std::endl;
     
     // 5. LISTEN (identique)
     if (listen(_listenSocket, 128) < 0) {
