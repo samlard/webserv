@@ -26,6 +26,9 @@ public:
     void shutdown();
     int init(Config &config);
     void run();
+    void handleClientRead(size_t i);
+    void acceptNewClient();
+
 };
 
 #endif
