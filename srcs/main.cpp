@@ -34,14 +34,14 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 	
-	// // Set up signal handlers
-	// signal(SIGINT, signalHandler);
-	// signal(SIGTERM, signalHandler);
+	// Set up signal handlers
+	signal(SIGINT, signalHandler);
+	signal(SIGTERM, signalHandler);
 	
-	// // Run server
-	// std::cout << "Server started successfully" << std::endl;
-	// server.run();
+	// Run server
+	std::cout << "Server started successfully" << std::endl;
+	server.run();
 	
-	// std::cout << "Server stopped" << std::endl;
+	std::cout << "Server stopped" << std::endl;
 	return 0;
 }

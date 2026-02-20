@@ -17,7 +17,7 @@
 class Server {
 private:
     int _listenSocket;
-    std::vector<pollfd> _fds;   // ← Remplace fd_set _masterSet + int _maxFd
+    std::vector<pollfd> _fds; 
     bool _running;
 
 public:

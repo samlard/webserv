@@ -120,35 +120,35 @@ void Server::run() {
             break;
         }
         
-        // Parcourir tous les fds surveillés
-        for (size_t i = 0; i < _fds.size(); ++i) {
-            int fd = _fds[i].fd;
-            short revents = _fds[i].revents;
+        // // Parcourir tous les fds surveillés
+        // for (size_t i = 0; i < _fds.size(); ++i) {
+        //     int fd = _fds[i].fd;
+        //     short revents = _fds[i].revents;
             
-            // === NOUVELLE CONNEXION (socket d'écoute) ===
-            if ((revents & POLLIN) && fd == _listenSocket) {
-                acceptNewClient();
-                continue;
-            }
+            // // === NOUVELLE CONNEXION (socket d'écoute) ===
+            // if ((revents & POLLIN) && fd == _listenSocket) {
+            //     acceptNewClient();
+            //     continue;
+            // }
             
-            // === DONNÉES CLIENT ===
-            if (revents & POLLIN) {
-                handleClientRead(i);
-            }
+            // // === DONNÉES CLIENT ===
+            // if (revents & POLLIN) {
+            //     handleClientRead(i);
+            // }
             
-            // === PRÊT À ÉCRIRE ===
-            if (revents & POLLOUT) {
-                handleClientWrite(i);
-            }
+            // // === PRÊT À ÉCRIRE ===
+            // if (revents & POLLOUT) {
+            //     handleClientWrite(i);
+            // }
             
-            // === ERREUR / DÉCONNEXION ===
-            if (revents & (POLLERR | POLLHUP | POLLNVAL)) {
-                closeClient(i);
-                --i;  // Reculer car on a supprimé un élément
+            // // === ERREUR / DÉCONNEXION ===
+            // if (revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            //     closeClient(i);
+            //     --i;  // Reculer car on a supprimé un élément
             }
         }
-    }
-}
+  //  }
+//}
 
 // void Server::run(){
 
