@@ -11,6 +11,7 @@ Server::~Server() {
 
 void Server::shutdown(){
 	//free all and clean server object
+    return ;
 }
 
 // int Server::init(Config &config) {
@@ -58,6 +59,7 @@ int Server::init(Config &config) {
         perror("socket");
         return 1;
     }
+    std::cout << "coucou" << std::endl;
     
     // 2. NON-BLOQUANT (identique)
     fcntl(_listenSocket, F_SETFL, O_NONBLOCK);
@@ -82,6 +84,7 @@ int Server::init(Config &config) {
         close(_listenSocket);
         return 1;
     }
+        std::cout << "coucou1" << std::endl;
     
     // 5. LISTEN (identique)
     if (listen(_listenSocket, 128) < 0) {
@@ -89,6 +92,7 @@ int Server::init(Config &config) {
         close(_listenSocket);
         return 1;
     }
+        std::cout << "coucou2" << std::endl;
     
     // 6. PREPARER POLL (NOUVEAU)
     _fds.clear();  // ← Vide le vector

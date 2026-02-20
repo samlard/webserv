@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
 	Server server;
 	g_server = &server;
 	
-	if (!server.init(config)) {
+	if (server.init(config)) {
 		std::cerr << "Failed to initialize server" << std::endl;
 		return 1;
 	}
