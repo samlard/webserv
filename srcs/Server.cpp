@@ -11,14 +11,14 @@ Server::~Server() {
 
 void Server::shutdown(){
 	//free all and clean server object
-    return ;
+    exit(0);
 }
 
 
 int Server::init(Config &config) {
-    int port = config.getPort();
-    std::string host = config.getHost();
-    
+    int port = 8080;
+    std::string host;
+    (void)config;
     // 1. SOCKET (identique)
     _listenSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (_listenSocket < 0) {
@@ -39,10 +39,11 @@ int Server::init(Config &config) {
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     
-    if (host == "0.0.0.0")
-        addr.sin_addr.s_addr = INADDR_ANY;
-    else
-        addr.sin_addr.s_addr = inet_addr(host.c_str());
+    host = "0.0.0.0";
+    // if (host == "0.0.0.0")
+    //     addr.sin_addr.s_addr = INADDR_ANY;
+    // else
+    //     addr.sin_addr.s_addr = inet_addr(host.c_str());
     
     if (bind(_listenSocket, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         perror("bind");
@@ -56,7 +57,6 @@ int Server::init(Config &config) {
         close(_listenSocket);
         return 1;
     }
-        std::cout << "coucou2" << std::endl;
     
     // 6. PREPARER POLL (NOUVEAU)
     _fds.clear();  // ← Vide le vector
