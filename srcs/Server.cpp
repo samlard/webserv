@@ -118,33 +118,67 @@ void Server::run() {
   //  }
 }
 
- void Server::handleClientRead(size_t i) {
+//  void Server::handleClientRead(size_t i) {
+//     int fd = _fds[i].fd;
+//     char buffer[4096];
+    
+//     int bytes = recv(fd, buffer, 4096, 0);
+    
+//     if (bytes <= 0) {
+//         // Fermer proprement
+//         close(fd);
+//         _fds.erase(_fds.begin() + i);
+//         return;
+//     }
+    
+//     // Réponse HTTP
+//     std::string response = 
+//         "HTTP/1.1 200 OK\r\n"
+//         "Content-Type: text/html\r\n"
+//         "Content-Length: 25\r\n"
+//         "\r\n"
+//         "<h1>Hello Webserv!</h1>";
+    
+//     send(fd, response.c_str(), response.length(), 0);
+    
+//     // Fermer la connexion
+//     //close(fd);
+//     _fds.erase(_fds.begin() + i);
+// }
+void Server::handleClientRead(size_t i) {
     int fd = _fds[i].fd;
     char buffer[4096];
-    
-    int bytes = recv(fd, buffer, 4096, 0);
-    
+
+    int bytes = recv(fd, buffer, sizeof(buffer), 0);
     if (bytes <= 0) {
-        // Fermer proprement
         close(fd);
         _fds.erase(_fds.begin() + i);
         return;
     }
-    
-    // Réponse HTTP
-    std::string response = 
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: text/html\r\n"
-        "Content-Length: 25\r\n"
-        "\r\n"
-        "<h1>Hello Webserv!</h1>";
-    
-    send(fd, response.c_str(), response.length(), 0);
-    
-    // Fermer la connexion
-    //close(fd);
+
+    Client& client = _clients[fd]; // suppose map<int, Client> _clients;
+    client.appendToRequest(std::string(buffer, bytes));
+
+    if (!client.isRequestComplete())
+        return; // attendre la suite
+
+    // Exemple de réponse selon la méthode
+    std::string body;
+    if (client.getMethod() == "GET") {
+        body = "<h1>Hello Webserv GET!</h1>";
+    } else if (client.getMethod() == "POST") {
+        body = "<h1>POST reçu : " + client.getRequestBody() + "</h1>";
+    }
+
+    client.buildResponse(body);
+
+    send(fd, client.getResponse().c_str(), client.getResponse().length(), 0);
+
+    close(fd);
     _fds.erase(_fds.begin() + i);
+    _clients.erase(fd);
 }
+
 
 
 void Server::acceptNewClient() {
