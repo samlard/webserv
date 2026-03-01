@@ -19,7 +19,7 @@ bool Config::is_valid_server_directive(const std::string& key) {
 bool Config::is_valid_location_directive(const std::string& key) {
     return key == "root" || key == "index" || key == "allow_methods" ||
            key == "methods" || key == "autoindex" || key == "upload_path" ||
-           key == "cgi_extension" || key == "cgi_path" || key == "return";
+           key == "cgi_extension" || key == "cgi_path";
 }
 
 std::string trim(const std::string& str) {
@@ -32,9 +32,138 @@ std::string trim(const std::string& str) {
     return str.substr(start, end - start + 1);
 }
 
+
 int Config::fill_location(std::istringstream &iss, Location &loc, std::string &error)
 {
-
+    std::string firstLine;
+    std::getline(iss, firstLine);
+    
+    std::istringstream firstIss(trim(firstLine));
+    std::string locKeyword, path, brace;
+    
+    firstIss >> locKeyword >> path >> brace;
+    if (locKeyword != "location") {
+        error = "Expected 'location', found: " + locKeyword;
+        return 1;
+    }
+    if (path.empty()) {
+        error = "Missing path in location";
+        return 1;
+    }
+    loc.path = path;
+    
+    if (brace != "{") {
+        error = "Expected '{', found: " + (brace.empty() ? "nothing" : brace);
+        return 1;
+    }
+    
+    std::string line;
+    while (std::getline(iss, line)) {
+        std::string trimmed = trim(line);
+        
+        // Fin du bloc
+        if (trimmed == "}" || trimmed.find("}") != std::string::npos)
+            break;
+        
+        // Skip vide et commentaires
+        if (trimmed.empty() || trimmed[0] == '#')
+            continue;
+        
+        // Vérifie le ; final
+        if (trimmed[trimmed.length() - 1] != ';') {
+            error = "Missing semicolon in location " + loc.path + ": '" + trimmed + "'";
+            return 1;
+        }
+        
+        // Enlève le ;
+        std::string noSemi = trimmed.substr(0, trimmed.length() - 1);
+        
+        // Sépare key et value
+        std::istringstream lineIss(noSemi);
+        std::string key;
+        lineIss >> key;
+        
+        // Vérifie directive valide
+        if (!is_valid_location_directive(key)) {
+            error = "Unknown directive '" + key + "' in location " + loc.path;
+            return 1;
+        }
+        
+        // Récupère la valeur
+        std::string value;
+        std::getline(lineIss, value);
+        value = trim(value);
+        
+        // ========== REMPLISSAGE OBLIGATOIRE 42 ==========
+        
+        // root : path
+        if (key == "root") {
+            if (value.empty()) {
+                error = "root requires a path in location " + loc.path;
+                return 1;
+            }
+            loc.root = value;
+        }
+        
+        // index : fichier
+        else if (key == "index") {
+            if (value.empty()) {
+                error = "index requires a filename in location " + loc.path;
+                return 1;
+            }
+            loc.index = value;
+        }
+        
+        // allow_methods : GET POST DELETE uniquement
+        else if (key == "allow_methods" || key == "methods") {
+            if (value.empty()) {
+                error = "allow_methods requires at least one method in location " + loc.path;
+                return 1;
+            }
+            std::istringstream m(value);
+            std::string method;
+            while (m >> method) {
+                if (method != "GET" && method != "POST" && method != "DELETE") {
+                    error = "Invalid method '" + method + "' in location " + loc.path;
+                    return 1;
+                }
+                loc.methods.push_back(method);
+            }
+        }
+        
+        // autoindex : on ou off uniquement
+        else if (key == "autoindex") {
+            if (value != "on" && value != "off") {
+                error = "autoindex must be 'on' or 'off' in location " + loc.path + ", found: " + value;
+                return 1;
+            }
+            // loc.autoindex = (value == "on");
+        }
+        
+        // cgi_extension : doit commencer par .
+        else if (key == "cgi_extension") {
+            if (value.empty()) {
+                error = "cgi_extension requires an extension in location " + loc.path;
+                return 1;
+            }
+            if (value[0] != '.') {
+                error = "cgi_extension must start with '.', found: " + value + " in location " + loc.path;
+                return 1;
+            }
+            loc.cgi_extension = value;
+        }
+        
+        // cgi_path : path exécutable
+        else if (key == "cgi_path") {
+            if (value.empty()) {
+                error = "cgi_path requires a path in location " + loc.path;
+                return 1;
+            }
+            loc.cgi_path = value;
+        }
+    }
+    
+    return 0;
 }
 
 int Config::fill_server(std::string &ServerBlock, std::string &error)
@@ -60,31 +189,44 @@ int Config::fill_server(std::string &ServerBlock, std::string &error)
             serv.locations.push_back(loc);
             continue;
         }
+
+        if (trimmed[trimmed.length() - 1] != ';') {
+            error = "Missing semicolon: '" + trimmed + "'";
+            return 1;
+        }
+        std::string noSemi = trimmed.substr(0, trimmed.length() - 1);
+        std::istringstream lineIss(noSemi);
+        std::string key;
+        lineIss >> key;
+
+        std::string value;
+        std::getline(lineIss, value);
+        value = trim(value);
+
+        if (!is_valid_server_directive(key)) {
+            error = "Unknown directive '" + key + "' in server block";
+            return 1;
+        }
         
-        // // Parse directive simple
-        // std::string key, value;
-        // if (!parse_directive(trimmed, key, value)) {
-        //     error = "Invalid syntax: '" + trimmed + "'";
-        //     return 1;
-        // }
-        
-        // // Vérification directive valide
-        // if (!is_valid_server_directive(key)) {
-        //     error = "Unknown directive '" + key + "'";
-        //     return 1;
-        // }
-        
-        // Remplissage
         if (key == "listen") {
-            // Vérification nombre
+            if (value.empty()) {
+                error = "listen requires a port number";
+                return 1;
+            }
             for (size_t i = 0; i < value.length(); i++) {
                 if (!isdigit(value[i])) {
-                    error = "Invalid port: '" + value + "'";
+                    error = "listen must be a number, found: '" + value + "'";
                     return 1;
                 }
             }
-            serv.port = atoi(value.c_str());
+            int port = atoi(value.c_str());
+            if (port < 1 || port > 65535) {
+                error = "listen port out of range (1-65535): '" + value + "'";
+                return 1;
+            }
+            serv.port = port;
         }
+        
         else if (key == "host") {
             serv.host = value;
         }
@@ -97,16 +239,27 @@ int Config::fill_server(std::string &ServerBlock, std::string &error)
         else if (key == "index") {
             serv.index = value;
         }
-        // ... autres directives
+        
+        // // client_max_body_size : optionnel
+        // else if (key == "client_max_body_size") {
+        //     // Tu peux parser ou juste stocker la string
+        //     serv.client_max_body_size_str = value;
+        // // }
+        
+        // // error_page : optionnel
+        // else if (key == "error_page") {
+        //     // Parse simple ou stockage
+        //     // parse_error_page(value, serv.error_pages);
+        // }
     }
     
-    // Validation minimale
+    // ========== VALIDATION FINALE ==========
     if (serv.port == 0) {
-        error = "Missing 'listen' directive";
+        error = "Missing 'listen' directive in server block";
         return 1;
-    } 
+    }
     _servers.push_back(serv);
-    return 0;  // Succès
+    return 0;
 }
 
 int Config::parseFile(const std::string& filename) {

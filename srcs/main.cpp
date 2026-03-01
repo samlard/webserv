@@ -24,23 +24,23 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 	
-	// // Create and initialize server
-	// Server server;
-	// g_server = &server;
+	// Create and initialize server
+	Server server;
+	g_server = &server;
 	
-	// if (server.init(config)) {
-	// 	std::cerr << "Failed to initialize server" << std::endl;
-	// 	return 1;
-	// }
+	if (server.init(config)) {
+		std::cerr << "Failed to initialize server" << std::endl;
+		return 1;
+	}
 	
-	// // Set up signal handlers
-	// signal(SIGINT, signalHandler);
-	// signal(SIGTERM, signalHandler);
+	// Set up signal handlers
+	signal(SIGINT, signalHandler);
+	signal(SIGTERM, signalHandler);
 	
-	// // Run server
-	// std::cout << "Server started successfully" << std::endl;
-	// server.run();
+	// Run server
+	std::cout << "Server started successfully" << std::endl;
+	server.run();
 	
-	// std::cout << "Server stopped" << std::endl;
+	std::cout << "Server stopped" << std::endl;
 	return 0;
 }

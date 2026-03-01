@@ -17,11 +17,11 @@ class Location {
     	std::string                 root;
     	std::string                 index;
     	std::vector<std::string>       methods;
-    // bool                        autoindex;
-   	// 	std::string                 redirect;
-    // 	std::string                 cgi_extension;
-    // 	std::string                 cgi_path;
-    // 	std::string                 upload_path;
+    bool                        autoindex;
+   		std::string                 redirect;
+    	std::string                 cgi_extension;
+    	std::string                 cgi_path;
+    	std::string                 upload_path;
     
     Location(){};
     ~Location(){};
@@ -34,8 +34,8 @@ class ServerConfig {
     	std::vector<std::string>    server_names;
     	std::string                 root;
     	std::string                 index;
-    	// std::map<int, std::string>  error_pages;
-    	// size_t                      client_max_body_size;
+    	std::map<int, std::string>  error_pages;
+    	size_t                      client_max_body_size;
     	std::vector<Location>       locations;
     
     	ServerConfig(){};
@@ -60,11 +60,7 @@ class Config {
 		std::string getError() const;
 		int fill_location(std::istringstream &iss, Location &loc, std::string &error);
 		bool is_valid_server_directive(const std::string& key);
-		bool is_valid_location_directive(const std::string& key)
-		// int getPort() const;
-    	// std::string getHost() const;
-    	// std::string getRoot() const;
-    	// std::string getIndex() const;
+		bool is_valid_location_directive(const std::string& key);
 };
 
 
