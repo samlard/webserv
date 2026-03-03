@@ -2,6 +2,7 @@
 #define SERVER_HPP
 
 #include "Config.hpp"
+#include "Client.hpp"
 #include <vector>
 #include <map>
 #include <poll.h>        // ← Remplace <sys/select.h>
@@ -16,8 +17,10 @@
 
 class Server {
 private:
-    int _listenSocket;
-    std::vector<pollfd> _fds; 
+    std::vector<int> _listenSockets;
+    std::vector<ServerConfig> _serverConfigs;
+    std::vector<pollfd> _fds;
+    std::map<int, Client> _clients;    
     bool _running;
 
 public:
@@ -27,7 +30,8 @@ public:
     int init(Config &config);
     void run();
     void handleClientRead(size_t i);
-    void acceptNewClient();
+    void acceptNewClient(int fd);
+    int findServerIndex(int listenSocket) const;
 
 };
 

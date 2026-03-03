@@ -10,182 +10,201 @@ Server::~Server() {
 }
 
 void Server::shutdown(){
-	//free all and clean server object
     exit(0);
 }
 
+int Server::findServerIndex(int listenSocket) const {
+    for (size_t i = 0; i < _listenSockets.size(); i++) {
+        if (_listenSockets[i] == listenSocket) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
 
 int Server::init(Config &config) {
-    int port = 8080;
-    std::string host;
-    (void)config;
-    // 1. SOCKET (identique)
-    _listenSocket = socket(AF_INET, SOCK_STREAM, 0);
-    if (_listenSocket < 0) {
-        perror("socket");
-        return 1;
-    }
 
-    // 2. NON-BLOQUANT (identique)
-    fcntl(_listenSocket, F_SETFL, O_NONBLOCK);
+    const std::vector<ServerConfig>& servers = config.getServers();
     
-    // 3. REUTILISATION PORT (recommandé)
-    int opt = 1;
-    setsockopt(_listenSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-    
-    // 4. BIND (identique)
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    
-    host = "0.0.0.0";
-    // if (host == "0.0.0.0")
-    //     addr.sin_addr.s_addr = INADDR_ANY;
-    // else
-    //     addr.sin_addr.s_addr = inet_addr(host.c_str());
-    
-    if (bind(_listenSocket, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        perror("bind");
-        close(_listenSocket);
+    if (servers.empty()) {
+        std::cerr << "Error: No server configuration found" << std::endl;
         return 1;
     }
     
-    // 5. LISTEN (identique)
-    if (listen(_listenSocket, 128) < 0) {
-        perror("listen");
-        close(_listenSocket);
-        return 1;
+    for (size_t i = 0; i < servers.size(); i++) {
+        int port = servers[i].port;
+        std::string host = servers[i].host;
+        
+        if (port == 0) {
+            std::cerr << "Error: Server " << i << " has no port" << std::endl;
+            continue;
+        }
+        
+        int listenSocket = socket(AF_INET, SOCK_STREAM, 0);
+        if (listenSocket < 0) {
+            perror("socket");
+            for (size_t j = 0; j < _listenSockets.size(); j++) {
+                close(_listenSockets[j]);
+            }
+            return 1;
+        }
+    
+        if (fcntl(listenSocket, F_SETFL, O_NONBLOCK) < 0) {
+            perror("fcntl");
+            close(listenSocket);
+            for (size_t j = 0; j < _listenSockets.size(); j++) {
+                close(_listenSockets[j]);
+            }
+            return 1;
+        }
+        
+        int opt = 1;
+        if (setsockopt(listenSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+            perror("setsockopt");
+            close(listenSocket);
+            for (size_t j = 0; j < _listenSockets.size(); j++) {
+                close(_listenSockets[j]);
+            }
+            return 1;
+        }
+        
+        struct sockaddr_in addr;
+        memset(&addr, 0, sizeof(addr));
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(port);
+        
+        if (host.empty() || host == "0.0.0.0") {
+            addr.sin_addr.s_addr = INADDR_ANY;
+            host = "0.0.0.0";
+        } else {
+            addr.sin_addr.s_addr = inet_addr(host.c_str());
+        }
+        
+        if (bind(listenSocket, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+            perror("bind");
+            close(listenSocket);
+            for (size_t j = 0; j < _listenSockets.size(); j++) {
+                close(_listenSockets[j]);
+            }
+            return 1;
+        }
+        
+        if (listen(listenSocket, 128) < 0) {
+            perror("listen");
+            close(listenSocket);
+            for (size_t j = 0; j < _listenSockets.size(); j++) {
+                close(_listenSockets[j]);
+            }
+            return 1;
+        }
+        
+        _listenSockets.push_back(listenSocket);
+        _serverConfigs.push_back(servers[i]);
+        
+        pollfd pfd;
+        pfd.fd = listenSocket;
+        pfd.events = POLLIN;
+        pfd.revents = 0;
+        _fds.push_back(pfd);
+        std::cout << "  [" << i << "] Listening on " << host << ":" << port 
+                  << " (fd=" << listenSocket << ")" << std::endl;
     }
     
-    // 6. PREPARER POLL (NOUVEAU)
-    _fds.clear();  // ← Vide le vector
-    
-    pollfd pfd;    // ← Structure pollfd
-    pfd.fd = _listenSocket;  // ← Socket à surveiller
-    pfd.events = POLLIN;     // ← Surveille lecture (connexions entrantes)
-    pfd.revents = 0;         // ← Init à 0
-    
-    _fds.push_back(pfd);     // ← Ajoute au vector
-    
+    if (_listenSockets.empty()) {
+        std::cerr << "Error: No server could be initialized" << std::endl;
+        return 1;
+    }
     _running = true;
-    
-    std::cout << "Listening on " << host << ":" << port << std::endl;
+    std::cout << "Server initialized successfully" << std::endl;
     return 0;
 }
 
-
 void Server::run() {
-    // _fds est déjà initialisé dans init() avec _listenSocket
-    
     while (_running) {
-        // Attente infinie jusqu'à événement (-1 = bloquant jusqu'à activité)
+
         int ret = poll(_fds.data(), _fds.size(), -1);
-        
         if (ret < 0) {
-            if (errno == EINTR) continue;  // Signal reçu, on recommande
+            if (errno == EINTR) continue;
             perror("poll");
             break;
         }
         
-        // Parcourir tous les fds surveillés
-        for (size_t i = 0; i < _fds.size(); ++i) {
+        for (int i = (int)_fds.size() - 1; i >= 0; i--) {
             int fd = _fds[i].fd;
             short revents = _fds[i].revents;
             
-            // === NOUVELLE CONNEXION (socket d'écoute) ===
-            if ((revents & POLLIN) && fd == _listenSocket) {
-                acceptNewClient();
+            if (revents == 0) continue;  // Pas d'activité
+            
+            bool isListenSocket = false;
+            for (size_t j = 0; j < _listenSockets.size(); j++) {
+                if (_listenSockets[j] == fd) {
+                    isListenSocket = true;
+                    break;
+                }
+            }
+            if (isListenSocket && (revents & POLLIN)) {
+                acceptNewClient(fd);
                 continue;
             }
-            
-            // === DONNÉES CLIENT ===
-            if (revents & POLLIN) {
-                handleClientRead(i);
-            }
-            
-            // // === PRÊT À ÉCRIRE ===
-            // if (revents & POLLOUT) {
-            //     handleClientWrite(i);
+        
+            // if (!isListenSocket && (revents & POLLIN)) {
+            //     if (handleClientRead(i) == -1) {
+            //     }
+            //     continue;
             // }
-            
-            // // === ERREUR / DÉCONNEXION ===
-            // if (revents & (POLLERR | POLLHUP | POLLNVAL)) {
-            //     closeClient(i);
-            //     --i;  // Reculer car on a supprimé un élément
+            if (revents & (POLLERR | POLLHUP | POLLNVAL)) {
+                close(fd);
+                _clients.erase(fd);
+                _fds.erase(_fds.begin() + i);
+                // Pas de i-- car parcours inverse
             }
         }
-  //  }
+    }
 }
 
-//  void Server::handleClientRead(size_t i) {
+
+// void Server::handleClientRead(size_t i) {
 //     int fd = _fds[i].fd;
 //     char buffer[4096];
-    
-//     int bytes = recv(fd, buffer, 4096, 0);
-    
+
+//     int bytes = recv(fd, buffer, sizeof(buffer), 0);
 //     if (bytes <= 0) {
-//         // Fermer proprement
 //         close(fd);
 //         _fds.erase(_fds.begin() + i);
 //         return;
 //     }
-    
-//     // Réponse HTTP
-//     std::string response = 
-//         "HTTP/1.1 200 OK\r\n"
-//         "Content-Type: text/html\r\n"
-//         "Content-Length: 25\r\n"
-//         "\r\n"
-//         "<h1>Hello Webserv!</h1>";
-    
-//     send(fd, response.c_str(), response.length(), 0);
-    
-//     // Fermer la connexion
-//     //close(fd);
+
+//     Client& client = _clients[fd]; // suppose map<int, Client> _clients;
+//     client.appendToRequest(std::string(buffer, bytes));
+
+//     if (!client.isRequestComplete())
+//         return; // attendre la suite
+
+//     // Exemple de réponse selon la méthode
+//     std::string body;
+//     if (client.getMethod() == "GET") {
+//         body = "<h1>Hello Webserv GET!</h1>";
+//     } else if (client.getMethod() == "POST") {
+//         body = "<h1>POST reçu : " + client.getRequestBody() + "</h1>";
+//     }
+
+//     client.buildResponse(body);
+
+//     send(fd, client.getResponse().c_str(), client.getResponse().length(), 0);
+
+//     close(fd);
 //     _fds.erase(_fds.begin() + i);
+//     _clients.erase(fd);
 // }
-void Server::handleClientRead(size_t i) {
-    int fd = _fds[i].fd;
-    char buffer[4096];
-
-    int bytes = recv(fd, buffer, sizeof(buffer), 0);
-    if (bytes <= 0) {
-        close(fd);
-        _fds.erase(_fds.begin() + i);
-        return;
-    }
-
-    Client& client = _clients[fd]; // suppose map<int, Client> _clients;
-    client.appendToRequest(std::string(buffer, bytes));
-
-    if (!client.isRequestComplete())
-        return; // attendre la suite
-
-    // Exemple de réponse selon la méthode
-    std::string body;
-    if (client.getMethod() == "GET") {
-        body = "<h1>Hello Webserv GET!</h1>";
-    } else if (client.getMethod() == "POST") {
-        body = "<h1>POST reçu : " + client.getRequestBody() + "</h1>";
-    }
-
-    client.buildResponse(body);
-
-    send(fd, client.getResponse().c_str(), client.getResponse().length(), 0);
-
-    close(fd);
-    _fds.erase(_fds.begin() + i);
-    _clients.erase(fd);
-}
 
 
 
-void Server::acceptNewClient() {
+void Server::acceptNewClient(int listenSocket) {
     sockaddr_in clientAddr;
     socklen_t addrLen = sizeof(clientAddr);
     
-    int clientFd = accept(_listenSocket, (sockaddr*)&clientAddr, &addrLen);
+    // Accepte la connexion sur le socket spécifique
+    int clientFd = accept(listenSocket, (sockaddr*)&clientAddr, &addrLen);
     if (clientFd < 0) {
         if (errno != EAGAIN && errno != EWOULDBLOCK) {
             perror("accept");
@@ -193,15 +212,29 @@ void Server::acceptNewClient() {
         return;
     }
     
-    // Rendre non-bloquant
+    // Rend non-bloquant
     fcntl(clientFd, F_SETFL, O_NONBLOCK);
     
-    // Ajouter à poll
+    // Trouve l'index du serveur correspondant
+    int serverIndex = findServerIndex(listenSocket);
+    if (serverIndex == -1) {
+        std::cerr << "Error: Could not find server for socket " << listenSocket << std::endl;
+        close(clientFd);
+        return;
+    }
+    
+    // Crée le client avec son fd et l'index du serveur
+    _clients[clientFd] = Client(clientFd, serverIndex);
+    
+    // Ajoute à poll pour surveillance
     pollfd pfd;
     pfd.fd = clientFd;
     pfd.events = POLLIN;
     pfd.revents = 0;
     _fds.push_back(pfd);
     
-    std::cout << "New client: " << clientFd << std::endl;
+    std::cout << "New client fd=" << clientFd 
+              << " on server [" << serverIndex << "] " 
+              << _serverConfigs[serverIndex].host << ":"
+              << _serverConfigs[serverIndex].port << std::endl;
 }

@@ -312,6 +312,5 @@ int Config::parseFile(const std::string& filename) {
         _errorMsg = "No valid server found";
         return 1;
     }
-
     return 0;
 }

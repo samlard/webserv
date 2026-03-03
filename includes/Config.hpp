@@ -17,7 +17,7 @@ class Location {
     	std::string                 root;
     	std::string                 index;
     	std::vector<std::string>       methods;
-    bool                        autoindex;
+    	bool                        autoindex;
    		std::string                 redirect;
     	std::string                 cgi_extension;
     	std::string                 cgi_path;
