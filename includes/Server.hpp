@@ -32,6 +32,8 @@ public:
     void handleClientRead(size_t i);
     void acceptNewClient(int fd);
     int findServerIndex(int listenSocket) const;
+    void parseRequest(const std::string& request, std::string& method, std::string& uri);
+    std::string buildResponse(Client& client, const std::string& method, const std::string& uri);
 
 };
 

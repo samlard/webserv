@@ -79,7 +79,6 @@ int Server::init(Config &config) {
         } else {
             addr.sin_addr.s_addr = inet_addr(host.c_str());
         }
-        
         if (bind(listenSocket, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
             perror("bind");
             close(listenSocket);
@@ -163,39 +162,41 @@ void Server::run() {
 }
 
 
-// void Server::handleClientRead(size_t i) {
-//     int fd = _fds[i].fd;
-//     char buffer[4096];
-
-//     int bytes = recv(fd, buffer, sizeof(buffer), 0);
-//     if (bytes <= 0) {
-//         close(fd);
-//         _fds.erase(_fds.begin() + i);
-//         return;
-//     }
-
-//     Client& client = _clients[fd]; // suppose map<int, Client> _clients;
-//     client.appendToRequest(std::string(buffer, bytes));
-
-//     if (!client.isRequestComplete())
-//         return; // attendre la suite
-
-//     // Exemple de réponse selon la méthode
-//     std::string body;
-//     if (client.getMethod() == "GET") {
-//         body = "<h1>Hello Webserv GET!</h1>";
-//     } else if (client.getMethod() == "POST") {
-//         body = "<h1>POST reçu : " + client.getRequestBody() + "</h1>";
-//     }
-
-//     client.buildResponse(body);
-
-//     send(fd, client.getResponse().c_str(), client.getResponse().length(), 0);
-
-//     close(fd);
-//     _fds.erase(_fds.begin() + i);
-//     _clients.erase(fd);
-// }
+void Server::handleClientRead(size_t i) {
+    int fd = _fds[i].fd;
+    char buffer[BUFFER_SIZE];
+    
+    // 1. LIT LES DONNÉES
+    int bytes = recv(fd, buffer, sizeof(buffer), 0);
+    
+    if (bytes <= 0) {
+        close(fd);
+        _clients.erase(fd);
+        _fds.erase(_fds.begin() + i);
+        return;
+    }
+    
+    // 2. ACCUMULE
+    Client& client = _clients[fd];
+    client.appendToRequest(std::string(buffer, bytes));
+    
+    if (!client.isRequestComplete()) {
+        return;  // Attend la suite
+    }
+    
+    // 3. PARSE REQUÊTE
+    std::string method, uri;
+    parseRequest(client.getRequestBuffer(), method, uri);
+    
+    // 4. BUILD ET ENVOIE RÉPONSE
+    std::string response = buildResponse(client, method, uri);
+    send(fd, response.c_str(), response.length(), 0);
+    
+    // 5. FERME
+    close(fd);
+    _clients.erase(fd);
+    _fds.erase(_fds.begin() + i);
+}
 
 
 
@@ -238,3 +239,42 @@ void Server::acceptNewClient(int listenSocket) {
               << _serverConfigs[serverIndex].host << ":"
               << _serverConfigs[serverIndex].port << std::endl;
 }
+
+// std::string Server::buildResponse(Client& client, const std::string& method, const std::string& uri) {
+//     // TROUVE SERVEUR
+//     int srvIdx = client.getServerIndex();
+//     const ServerConfig& serv = _serverConfigs[srvIdx];
+    
+//     // TROUVE LOCATION
+//     const Location* loc = findLocation(serv, uri);
+//     if (!loc) {
+//         return errorResponse(404, "Not Found");
+//     }
+    
+//     // VÉRIFIE MÉTHODE
+//     if (!isMethodAllowed(*loc, method)) {
+//         return errorResponse(405, "Method Not Allowed");
+//     }
+    
+//     // CONSTRUIT CHEMIN
+//     std::string filePath = buildFilePath(*loc, uri);
+    
+//     // DIFFÉRENCIE LES CAS
+//     if (isCgiRequest(*loc, filePath)) {
+//         return handleCgi(*loc, filePath, method, client.getRequestBuffer());
+//     }
+    
+//     if (method == "POST" && !loc->upload_path.empty()) {
+//         return handleUpload(*loc, client.getRequestBuffer());
+//     }
+    
+//     if (method == "DELETE") {
+//         return handleDelete(filePath);
+//     }
+    
+//     if (method == "GET") {
+//         return serveStaticFile(filePath, loc->index);
+//     }
+    
+//     return errorResponse(501, "Not Implemented");
+// }
