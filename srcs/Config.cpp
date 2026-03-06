@@ -171,29 +171,56 @@ int Config::fill_server(std::string &ServerBlock, std::string &error)
     ServerConfig serv;
     std::istringstream iss(ServerBlock);
     std::string line;
-    
+
+    // Skip la première ligne "server {"
     std::getline(iss, line);
+
     while (std::getline(iss, line)) {
         std::string trimmed = trim(line);
+        if (trimmed.empty() || trimmed[0] == '#')
+            continue;
+
+        // Fin du bloc serveur
         if (trimmed == "}" || trimmed.find("}") != std::string::npos)
             break;
 
-        if (trimmed.empty() || trimmed[0] == '#')
-            continue;
-        
+        // ======= Gestion des locations =======
         if (trimmed.find("location") == 0) {
             Location loc;
-            if (fill_location(iss, loc, error) != 0) {
+
+            // Construit tout le bloc location
+            std::string locBlock = trimmed + "\n";
+            std::string locLine;
+            int braceCount = 0;
+
+            // Compte les { de la ligne de départ
+            for (size_t i = 0; i < trimmed.size(); i++)
+                if (trimmed[i] == '{') braceCount++;
+
+            // Lit toutes les lignes jusqu'à équilibrage des accolades
+            while (braceCount > 0 && std::getline(iss, locLine)) {
+                locBlock += locLine + "\n";
+                for (size_t i = 0; i < locLine.size(); i++) {
+                    if (locLine[i] == '{') braceCount++;
+                    else if (locLine[i] == '}') braceCount--;
+                }
+            }
+
+            std::istringstream locStream(locBlock);
+            if (fill_location(locStream, loc, error) != 0) {
                 return 1;
             }
+
             serv.locations.push_back(loc);
             continue;
         }
 
+        // ======= Directives serveur =======
         if (trimmed[trimmed.length() - 1] != ';') {
             error = "Missing semicolon: '" + trimmed + "'";
             return 1;
         }
+
         std::string noSemi = trimmed.substr(0, trimmed.length() - 1);
         std::istringstream lineIss(noSemi);
         std::string key;
@@ -207,7 +234,7 @@ int Config::fill_server(std::string &ServerBlock, std::string &error)
             error = "Unknown directive '" + key + "' in server block";
             return 1;
         }
-        
+
         if (key == "listen") {
             if (value.empty()) {
                 error = "listen requires a port number";
@@ -225,39 +252,24 @@ int Config::fill_server(std::string &ServerBlock, std::string &error)
                 return 1;
             }
             serv.port = port;
-        }
-        
-        else if (key == "host") {
+        } else if (key == "host") {
             serv.host = value;
-        }
-        else if (key == "server_name") {
+        } else if (key == "server_name") {
             serv.server_names.push_back(value);
-        }
-        else if (key == "root") {
+        } else if (key == "root") {
             serv.root = value;
-        }
-        else if (key == "index") {
+        } else if (key == "index") {
             serv.index = value;
         }
-        
-        // // client_max_body_size : optionnel
-        // else if (key == "client_max_body_size") {
-        //     // Tu peux parser ou juste stocker la string
-        //     serv.client_max_body_size_str = value;
-        // // }
-        
-        // // error_page : optionnel
-        // else if (key == "error_page") {
-        //     // Parse simple ou stockage
-        //     // parse_error_page(value, serv.error_pages);
-        // }
+        // autres directives optionnelles : error_page, client_max_body_size
     }
-    
-    // ========== VALIDATION FINALE ==========
+
+    // Validation finale
     if (serv.port == 0) {
         error = "Missing 'listen' directive in server block";
         return 1;
     }
+
     _servers.push_back(serv);
     return 0;
 }
@@ -313,4 +325,9 @@ int Config::parseFile(const std::string& filename) {
         return 1;
     }
     return 0;
+}
+
+const std::vector<ServerConfig>& Config::getServers() const
+{
+    return _servers;
 }
