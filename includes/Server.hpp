@@ -3,6 +3,8 @@
 
 #include "Config.hpp"
 #include "Client.hpp"
+#include "Request.hpp"
+#include "Response.hpp"
 #include <vector>
 #include <map>
 #include <poll.h>        // ← Remplace <sys/select.h>
@@ -30,9 +32,9 @@ public:
     int init(Config &config);
     void run();
     void handleClientRead(size_t i);
-    void acceptNewClient(int fd);
+    void acceptNewClient(int listenSocket);
     int findServerIndex(int listenSocket) const;
-    void parseRequest(const std::string& request, std::string& method, std::string& uri);
+    void parseRequest(Client& client);
     std::string buildResponse(Client& client, const std::string& method, const std::string& uri);
 
 };

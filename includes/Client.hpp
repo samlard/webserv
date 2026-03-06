@@ -2,33 +2,40 @@
 #define CLIENT_HPP
 
 #include <string>
+#include "Request.hpp"
+#include "Response.hpp"
 
 class Client {
+
 private:
-    int _fd;                    // Socket de communication
-    int _serverIndex;           // Index du serveur qui l'a accepté (-1 = inconnu)
-    std::string _requestBuffer; // Données reçues (requête HTTP en cours)
-    bool _requestComplete;      // Requête entièrement reçue ?
-    std::string _response;      // Réponse à envoyer (si prête)
+
+    int _fd;
+    int _serverIndex;
+
+    std::string _requestBuffer;
+    bool _requestComplete;
+
+    Request _request;
+    Response _response;
 
 public:
-    // Constructeurs
+
     Client();
     Client(int fd, int serverIndex);
-    
-    // Getters
+
     int getFd() const;
     int getServerIndex() const;
-    const std::string& getRequestBuffer() const;
+
+    std::string& getBuffer();
     bool isRequestComplete() const;
-    const std::string& getResponse() const;
-    
-    // Setters / Modifiers
-    void setServerIndex(int index);
-    void appendToRequest(const std::string& data);
+
+    Request& getRequest();
+    Response& getResponse();
+
+    void appendToBuffer(const std::string& data);
     void markRequestComplete();
-    void setResponse(const std::string& response);
-    void clear();  // Reset pour réutilisation ou nettoyage
+
+    void clear();
 };
 
 #endif

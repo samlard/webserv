@@ -13,6 +13,11 @@ void Server::shutdown(){
     exit(0);
 }
 
+static bool isRequestComplete(const std::string& buffer)
+{
+    return buffer.find("\r\n\r\n") != std::string::npos;
+}
+
 int Server::findServerIndex(int listenSocket) const {
     for (size_t i = 0; i < _listenSockets.size(); i++) {
         if (_listenSockets[i] == listenSocket) {
@@ -146,10 +151,15 @@ void Server::run() {
                 continue;
             }
         
-            // if (!isListenSocket && (revents & POLLIN)) {
-            //     if (handleClientRead(i) == -1) {
-            //     }
-            //     continue;
+            if (!isListenSocket && (revents & POLLIN)) 
+                handleClientRead(i);
+            // if (_fds[i].revents & POLLOUT) {
+            //     Client &client = _clients[fd];
+            //     int sent = send(fd, client.getResponse().body.c_str(), client.getResponse().body.size(), 0);
+            //     client.getResponse().body.erase(0, sent);
+
+            // if (client.getResponse().body.empty()) {
+            //     _fds[i].events &= ~POLLOUT; // plus besoin d'écrire
             // }
             if (revents & (POLLERR | POLLHUP | POLLNVAL)) {
                 close(fd);
@@ -162,43 +172,67 @@ void Server::run() {
 }
 
 
-void Server::handleClientRead(size_t i) {
-    int fd = _fds[i].fd;
-    char buffer[BUFFER_SIZE];
-    
-    // 1. LIT LES DONNÉES
-    int bytes = recv(fd, buffer, sizeof(buffer), 0);
-    
-    if (bytes <= 0) {
-        close(fd);
-        _clients.erase(fd);
-        _fds.erase(_fds.begin() + i);
-        return;
+void Server::parseRequest(Client& client)
+{
+    std::string& raw = client.getBuffer();
+    Request& req = client.getRequest();
+
+    std::istringstream stream(raw);
+    std::string line;
+
+    // Request line
+    std::getline(stream, line);
+
+    std::istringstream requestLine(line);
+    requestLine >> req.method >> req.uri >> req.version;
+
+    // Headers
+    while (std::getline(stream, line) && line != "\r") {
+
+        size_t pos = line.find(":");
+
+        if (pos == std::string::npos)
+            continue;
+
+        std::string key = line.substr(0, pos);
+        std::string value = line.substr(pos + 2);
+
+        if (!value.empty() && value[value.size()-1] == '\r')
+            value.erase(value.size()-1);
+
+        req.headers[key] = value;
     }
-    
-    // 2. ACCUMULE
-    Client& client = _clients[fd];
-    client.appendToRequest(std::string(buffer, bytes));
-    
-    if (!client.isRequestComplete()) {
-        return;  // Attend la suite
-    }
-    
-    // 3. PARSE REQUÊTE
-    std::string method, uri;
-    parseRequest(client.getRequestBuffer(), method, uri);
-    
-    // 4. BUILD ET ENVOIE RÉPONSE
-    std::string response = buildResponse(client, method, uri);
-    send(fd, response.c_str(), response.length(), 0);
-    
-    // 5. FERME
-    close(fd);
-    _clients.erase(fd);
-    _fds.erase(_fds.begin() + i);
 }
 
+void Server::handleClientRead(size_t i)
+{
+    int fd = _fds[i].fd;
 
+    char buffer[4096];
+
+    int bytes = recv(fd, buffer, sizeof(buffer), 0);
+
+    if (bytes <= 0)
+        return;
+
+    Client& client = _clients[fd];
+
+    client.appendToBuffer(std::string(buffer, bytes));
+
+    if (isRequestComplete(client.getBuffer()))
+    {
+        client.markRequestComplete();
+
+        parseRequest(client);
+        std::string response = buildResponse(
+            client,
+            client.getRequest().method,
+            client.getRequest().uri
+        );
+
+        client.getResponse().body = response;
+    }
+}
 
 void Server::acceptNewClient(int listenSocket) {
     sockaddr_in clientAddr;
@@ -239,42 +273,3 @@ void Server::acceptNewClient(int listenSocket) {
               << _serverConfigs[serverIndex].host << ":"
               << _serverConfigs[serverIndex].port << std::endl;
 }
-
-// std::string Server::buildResponse(Client& client, const std::string& method, const std::string& uri) {
-//     // TROUVE SERVEUR
-//     int srvIdx = client.getServerIndex();
-//     const ServerConfig& serv = _serverConfigs[srvIdx];
-    
-//     // TROUVE LOCATION
-//     const Location* loc = findLocation(serv, uri);
-//     if (!loc) {
-//         return errorResponse(404, "Not Found");
-//     }
-    
-//     // VÉRIFIE MÉTHODE
-//     if (!isMethodAllowed(*loc, method)) {
-//         return errorResponse(405, "Method Not Allowed");
-//     }
-    
-//     // CONSTRUIT CHEMIN
-//     std::string filePath = buildFilePath(*loc, uri);
-    
-//     // DIFFÉRENCIE LES CAS
-//     if (isCgiRequest(*loc, filePath)) {
-//         return handleCgi(*loc, filePath, method, client.getRequestBuffer());
-//     }
-    
-//     if (method == "POST" && !loc->upload_path.empty()) {
-//         return handleUpload(*loc, client.getRequestBuffer());
-//     }
-    
-//     if (method == "DELETE") {
-//         return handleDelete(filePath);
-//     }
-    
-//     if (method == "GET") {
-//         return serveStaticFile(filePath, loc->index);
-//     }
-    
-//     return errorResponse(501, "Not Implemented");
-// }
