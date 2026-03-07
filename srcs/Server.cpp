@@ -18,6 +18,32 @@ static bool isRequestComplete(const std::string& buffer)
     return buffer.find("\r\n\r\n") != std::string::npos;
 }
 
+static std::string stripUriSuffix(const std::string& uri)
+{
+    size_t pos = uri.find_first_of("?#");
+    if (pos == std::string::npos)
+        return uri;
+    return uri.substr(0, pos);
+}
+
+static std::string buildPathFromLocation(const std::string& uriPath, const std::string& root, const Location* loc)
+{
+    if (!loc || loc->path.empty() || loc->path == "/")
+        return root + uriPath;
+
+    if (uriPath.find(loc->path) == 0)
+    {
+        std::string suffix = uriPath.substr(loc->path.size());
+        if (suffix.empty())
+            suffix = "/";
+        else if (suffix[0] != '/')
+            suffix = "/" + suffix;
+        return root + suffix;
+    }
+
+    return root + uriPath;
+}
+
 int Server::findServerIndex(int listenSocket) const {
     for (size_t i = 0; i < _listenSockets.size(); i++) {
         if (_listenSockets[i] == listenSocket) {
@@ -503,12 +529,35 @@ Response Server::buildResponse(Client& client)
 
 Location* Server::matchLocation(const ServerConfig& config, const std::string& uri)
 {
+    Location* bestMatch = NULL;
+    size_t bestLen = 0;
+    std::string cleanUri = stripUriSuffix(uri);
+
+    if (cleanUri.empty())
+        cleanUri = "/";
+
     for (size_t i = 0; i < config.locations.size(); i++)
     {
-        if (uri.find(config.locations[i].path) == 0)
-            return (Location*)&config.locations[i];
+        const std::string& locPath = config.locations[i].path;
+
+        if (locPath.empty())
+            continue;
+
+        if (cleanUri.find(locPath) != 0)
+            continue;
+
+        bool isBoundaryMatch = (locPath == "/" || cleanUri.size() == locPath.size() || cleanUri[locPath.size()] == '/');
+        if (!isBoundaryMatch)
+            continue;
+
+        if (locPath.size() > bestLen)
+        {
+            bestLen = locPath.size();
+            bestMatch = (Location*)&config.locations[i];
+        }
     }
-    return NULL;
+
+    return bestMatch;
 }
 
 bool Server::isCgiRequest(const std::string& path, Location* loc)
@@ -526,7 +575,7 @@ Response Server::handleGet(const Request& req, const ServerConfig& config, Locat
 {
     Response res;
 
-    std::string uri = req.uri;
+    std::string uri = stripUriSuffix(req.uri);
     const std::string root = !loc->root.empty() ? loc->root : config.root;
     const std::string index = !loc->index.empty() ? loc->index : config.index;
 
@@ -537,7 +586,7 @@ Response Server::handleGet(const Request& req, const ServerConfig& config, Locat
         uri = "/" + index;
     }
 
-    std::string path = root + uri;
+    std::string path = buildPathFromLocation(uri, root, loc);
 
     std::cout << "Requested I: " << uri << std::endl;
 
@@ -571,8 +620,9 @@ Response Server::handleGet(const Request& req, const ServerConfig& config, Locat
 Response Server::handlePost(const Request& req, const ServerConfig& config, Location* loc)
 {
     Response res;
+    std::string uri = stripUriSuffix(req.uri);
     std::string root = !loc->root.empty() ? loc->root : config.root;
-    std::string path = root + req.uri;
+    std::string path = buildPathFromLocation(uri, root, loc);
 
     if (isCgiRequest(path, loc))
         return executeCgi(req, path, loc);
@@ -586,8 +636,9 @@ Response Server::handlePost(const Request& req, const ServerConfig& config, Loca
 Response Server::handleDelete(const Request& req, const ServerConfig& config, Location* loc)
 {
     Response res;
+    std::string uri = stripUriSuffix(req.uri);
     std::string root = !loc->root.empty() ? loc->root : config.root;
-    std::string path = root + req.uri;
+    std::string path = buildPathFromLocation(uri, root, loc);
 
     if (remove(path.c_str()) == 0)
     {
