@@ -557,7 +557,11 @@ Response Server::handleGet(const Request& req, const ServerConfig& config, Locat
     }
 
     if (isCgiRequest(path, loc))
-        return executeCgi(req, path, loc);
+        return executeCgi(req, path, loc, config);
+
+    // Guard: reject directory paths that stat missed (e.g. symlinks to dirs on some OSes)
+    if (!path.empty() && path[path.size() - 1] == '/')
+        return makeErrorResponse(config, 403);
 
     std::ifstream file(path.c_str(), std::ios::binary);
 
@@ -582,7 +586,7 @@ Response Server::handlePost(const Request& req, const ServerConfig& config, Loca
     std::string path = root + req.uri;
 
     if (isCgiRequest(path, loc))
-        return executeCgi(req, path, loc);
+        return executeCgi(req, path, loc, config);
 
     // File upload: write body to upload_path
     if (!loc->upload_path.empty())
@@ -635,7 +639,7 @@ Response Server::handleDelete(const Request& req, const ServerConfig& config, Lo
     return res;
 }
 
-Response Server::executeCgi(const Request& req, const std::string& scriptPath, Location* loc)
+Response Server::executeCgi(const Request& req, const std::string& scriptPath, Location* loc, const ServerConfig& config)
 {
     Response res;
 
@@ -675,7 +679,7 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
     int pipeOut[2];
     int pipeIn[2];
     if (pipe(pipeOut) < 0 || pipe(pipeIn) < 0)
-        return makeErrorResponse(_serverConfigs[0], 500);
+        return makeErrorResponse(config, 500);
 
     pid_t pid = fork();
     if (pid == 0)
@@ -714,7 +718,12 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
         output.append(buffer, bytes);
 
     close(pipeOut[0]);
-    waitpid(pid, NULL, 0);
+    int childStatus = 0;
+    waitpid(pid, &childStatus, 0);
+
+    // If the child produced no output (interpreter not found, script error, etc.), report an error
+    if (output.empty())
+        return makeErrorResponse(config, 502);
 
     // Strip CGI headers from output (headers end at first blank line)
     size_t headerEnd = output.find("\r\n\r\n");

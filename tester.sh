@@ -5,6 +5,10 @@
 #  Default config: config/multi_port.conf  (port 9090 / 9091)
 # ============================================================
 
+# Always run from the directory that contains this script (repo root)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR" || exit 1
+
 # ---------- colours -----------------------------------------
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -14,15 +18,33 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 # ---------- configuration -----------------------------------
-CONF="${1:-config/multi_port.conf}"
-HOST="http://localhost:9090"
-HOST2="http://localhost:9091"
+BASE_CONF="${1:-config/multi_port.conf}"
 BINARY="./webserv"
 SERVER_PID=""
 
 PASS=0
 FAIL=0
 TOTAL=0
+
+# ---------- resolve HOST / HOST2 from config ----------------
+# Read ports from the first two 'listen' directives in the config
+PORT1=$(grep -m1 'listen' "$BASE_CONF" 2>/dev/null | grep -oE '[0-9]+' | head -1)
+PORT2=$(grep    'listen' "$BASE_CONF" 2>/dev/null | grep -oE '[0-9]+' | sed -n '2p')
+PORT1="${PORT1:-9090}"
+PORT2="${PORT2:-9091}"
+HOST="http://localhost:${PORT1}"
+HOST2="http://localhost:${PORT2}"
+
+# ---------- resolve bash interpreter -------------------------
+# The config may specify cgi_path /usr/bin/bash or /bin/bash.
+# Detect what is actually available and patch a temp config copy.
+REAL_BASH="$(command -v bash 2>/dev/null)"
+if [ -z "$REAL_BASH" ]; then
+    printf "${RED}bash not found in PATH — cannot run CGI tests${NC}\n"
+    exit 1
+fi
+CONF="/tmp/webserv_tester_$$.conf"
+sed "s|cgi_path [^ ;]*|cgi_path ${REAL_BASH}|g" "$BASE_CONF" > "$CONF"
 
 # ---------- helpers -----------------------------------------
 pass() {
@@ -92,31 +114,38 @@ assert_header_contains() {
 
 # ---------- setup -------------------------------------------
 start_server() {
-    if [ ! -f "$BINARY" ]; then
-        printf "${YELLOW}Binary not found — building…${NC}\n"
-        make -s
-        if [ $? -ne 0 ]; then
-            printf "${RED}Build failed. Aborting.${NC}\n"
-            exit 1
-        fi
+    # Always rebuild from latest source
+    printf "${YELLOW}Building…${NC}\n"
+    make -s
+    if [ $? -ne 0 ]; then
+        printf "${RED}Build failed. Aborting.${NC}\n"
+        exit 1
     fi
 
-    # Kill any leftover server on our ports
-    for port in 9090 9091; do
-        pid=$(lsof -ti tcp:$port 2>/dev/null)
-        if [ -n "$pid" ]; then
-            kill -9 "$pid" 2>/dev/null
-        fi
+    # Kill any leftover processes on our ports (lsof may return multiple PIDs)
+    for port in "$PORT1" "$PORT2"; do
+        pids=$(lsof -ti tcp:"$port" 2>/dev/null)
+        for pid in $pids; do
+            kill -9 "$pid" 2>/dev/null || true
+        done
     done
     sleep 1
 
     "$BINARY" "$CONF" > /tmp/webserv_test.log 2>&1 &
     SERVER_PID=$!
-    sleep 1
 
-    # Check it is actually running
-    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
-        printf "${RED}Server failed to start. Log:${NC}\n"
+    # Wait until the server actually accepts connections (up to 10 s)
+    local ready=0
+    for i in $(seq 1 20); do
+        if curl -s --connect-timeout 1 -o /dev/null "$HOST/" 2>/dev/null; then
+            ready=1
+            break
+        fi
+        sleep 0.5
+    done
+
+    if [ "$ready" -eq 0 ]; then
+        printf "${RED}Server did not become ready. Log:${NC}\n"
         cat /tmp/webserv_test.log
         exit 1
     fi
@@ -125,26 +154,30 @@ start_server() {
 
 stop_server() {
     if [ -n "$SERVER_PID" ]; then
-        kill -9 "$SERVER_PID" 2>/dev/null
-        wait "$SERVER_PID" 2>/dev/null
+        kill -9 "$SERVER_PID" 2>/dev/null || true
+        wait "$SERVER_PID" 2>/dev/null || true
         SERVER_PID=""
     fi
+    rm -f "$CONF"
 }
 
 trap 'stop_server' EXIT INT TERM
 
 # ---------- prepare test data --------------------------------
 prepare() {
+    # Ensure upload directory exists
+    mkdir -p www/uploads
+
     # Create a fresh delete-target file
-    cp www/test_dir/file2.txt /tmp/delete_target.txt
-    cp /tmp/delete_target.txt www/test_dir/delete_me.txt 2>/dev/null || true
+    echo "deleteme" > www/test_dir/delete_me.txt
 }
 
 # ---------- run tests ----------------------------------------
 main() {
     printf "${BOLD}WebServ Tester${NC} — %s\n" "$(date)"
-    printf "Config : %s\n" "$CONF"
-    printf "Host   : %s\n" "$HOST"
+    printf "Config : %s (patched from %s)\n" "$CONF" "$BASE_CONF"
+    printf "Host   : %s   Host2: %s\n" "$HOST" "$HOST2"
+    printf "Bash   : %s\n" "$REAL_BASH"
 
     start_server
     prepare
@@ -170,7 +203,7 @@ main() {
 
     # --------------------------------------------------------
     section "4. Method enforcement"
-    # Port 9091 only allows GET on /
+    # Port 2 (9091 by default) only allows GET on /
     assert_status "DELETE on GET-only location returns 405" \
         405 "$HOST2/" -X DELETE
     assert_status "POST on GET-only location returns 405" \
@@ -188,8 +221,6 @@ main() {
 
     # --------------------------------------------------------
     section "6. DELETE"
-    # Prepare a file to delete
-    echo "deleteme" > www/test_dir/delete_me.txt
     assert_status "DELETE /test_dir/delete_me.txt returns 200" \
         200 "$HOST/test_dir/delete_me.txt" -X DELETE
     # Verify file is gone
@@ -245,7 +276,7 @@ main() {
 
     # --------------------------------------------------------
     section "11. Multiple virtual servers"
-    assert_status "Second server (port 9091) GET / returns 200" \
+    assert_status "Second server (port ${PORT2}) GET / returns 200" \
         200 "$HOST2/"
 
     # --------------------------------------------------------

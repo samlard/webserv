@@ -23,7 +23,7 @@ class Location {
     	std::string                 cgi_path;
     	std::string                 upload_path;
     
-    Location(){};
+    Location() : autoindex(false) {}
     ~Location(){};
 };
 
@@ -38,7 +38,7 @@ class ServerConfig {
     	size_t                      client_max_body_size;
     	std::vector<Location>       locations;
     
-    	ServerConfig(){};
+    	ServerConfig() : port(0), client_max_body_size(0) {}
     	~ServerConfig(){};
 };
 

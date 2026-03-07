@@ -52,7 +52,7 @@ public:
 
     bool isCgiRequest(const std::string& path, Location* loc);
 
-    Response executeCgi(const Request& req, const std::string& scriptPath, Location* loc);
+    Response executeCgi(const Request& req, const std::string& scriptPath, Location* loc, const ServerConfig& config);
 };
 
 #endif
