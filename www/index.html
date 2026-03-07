@@ -11,14 +11,17 @@
         }
         h1 { color: #333; }
         .info { background: #f0f0f0; padding: 15px; border-radius: 5px; }
-        .btn-link {
+        .btn {
             display: inline-block;
-            margin-top: 10px;
-            padding: 10px 14px;
-            background: #2d7ef7;
-            color: #fff;
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
             text-decoration: none;
-            border-radius: 4px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        .btn:hover {
+            background: #45a049;
         }
     </style>
 </head>
@@ -26,19 +29,9 @@
     <h1>Welcome to WebServ!</h1>
     <div class="info">
         <p>This is a C++98 HTTP server implementation for the 42 Webserv project.</p>
-        <h2>Features:</h2>
-        <ul>
-            <li>Non-blocking I/O with poll()</li>
-            <li>Multiple server support</li>
-            <li>GET, POST, DELETE methods</li>
-            <li>Static file serving</li>
-            <li>Directory listing</li>
-            <li>CGI support</li>
-            <li>File uploads</li>
-            <li>Keep-alive connections</li>
-        </ul>
-        <ul>
-    <a class="btn-link" href="/hello.html">Go to Hello Page</a>
+        <h2>Test CGI</h2>
+        <!-- Bouton pour lancer le script CGI -->
+        <a class="btn" href="/cgi-bin/hello.py">Run Python CGI</a>
     </div>
 </body>
 </html>

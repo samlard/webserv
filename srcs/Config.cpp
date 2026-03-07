@@ -35,6 +35,8 @@ std::string trim(const std::string& str) {
 
 int Config::fill_location(std::istringstream &iss, Location &loc, std::string &error)
 {
+    loc.autoindex = false;
+
     std::string firstLine;
     std::getline(iss, firstLine);
     
@@ -137,7 +139,7 @@ int Config::fill_location(std::istringstream &iss, Location &loc, std::string &e
                 error = "autoindex must be 'on' or 'off' in location " + loc.path + ", found: " + value;
                 return 1;
             }
-            // loc.autoindex = (value == "on");
+            loc.autoindex = (value == "on");
         }
         
         // cgi_extension : doit commencer par .
@@ -161,6 +163,13 @@ int Config::fill_location(std::istringstream &iss, Location &loc, std::string &e
             }
             loc.cgi_path = value;
         }
+        else if (key == "upload_path") {
+            if (value.empty()) {
+                error = "upload_path requires a path in location " + loc.path;
+                return 1;
+            }
+            loc.upload_path = value;
+        }
     }
     
     return 0;
@@ -169,6 +178,10 @@ int Config::fill_location(std::istringstream &iss, Location &loc, std::string &e
 int Config::fill_server(std::string &ServerBlock, std::string &error)
 {
     ServerConfig serv;
+    serv.port = 0;
+    serv.host = "0.0.0.0";
+    serv.client_max_body_size = 1000000;
+
     std::istringstream iss(ServerBlock);
     std::string line;
 
@@ -260,6 +273,18 @@ int Config::fill_server(std::string &ServerBlock, std::string &error)
             serv.root = value;
         } else if (key == "index") {
             serv.index = value;
+        } else if (key == "client_max_body_size") {
+            if (value.empty()) {
+                error = "client_max_body_size requires a numeric value";
+                return 1;
+            }
+            for (size_t i = 0; i < value.length(); i++) {
+                if (!isdigit(value[i])) {
+                    error = "client_max_body_size must be a number, found: '" + value + "'";
+                    return 1;
+                }
+            }
+            serv.client_max_body_size = static_cast<size_t>(atoi(value.c_str()));
         }
         // autres directives optionnelles : error_page, client_max_body_size
     }

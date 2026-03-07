@@ -1,4 +1,7 @@
 #include "../includes/Server.hpp"
+#include <sys/stat.h>
+#include <dirent.h>
+#include <ctime>
 
 #define BUFFER_SIZE 4096
 
@@ -15,7 +18,27 @@ void Server::shutdown(){
 
 static bool isRequestComplete(const std::string& buffer)
 {
-    return buffer.find("\r\n\r\n") != std::string::npos;
+    size_t headerEnd = buffer.find("\r\n\r\n");
+    if (headerEnd == std::string::npos)
+        return false;
+
+    size_t contentLenPos = buffer.find("Content-Length:");
+    if (contentLenPos == std::string::npos || contentLenPos > headerEnd)
+        return true;
+
+    size_t valueStart = contentLenPos + strlen("Content-Length:");
+    while (valueStart < headerEnd && (buffer[valueStart] == ' ' || buffer[valueStart] == '\t'))
+        ++valueStart;
+
+    size_t valueEnd = buffer.find("\r\n", valueStart);
+    if (valueEnd == std::string::npos || valueEnd > headerEnd)
+        return false;
+
+    std::string value = buffer.substr(valueStart, valueEnd - valueStart);
+    size_t expectedBodySize = static_cast<size_t>(atoi(value.c_str()));
+    size_t actualBodySize = buffer.size() - (headerEnd + 4);
+
+    return actualBodySize >= expectedBodySize;
 }
 
 static std::string stripUriSuffix(const std::string& uri)
@@ -42,6 +65,71 @@ static std::string buildPathFromLocation(const std::string& uriPath, const std::
     }
 
     return root + uriPath;
+}
+
+static bool isMethodAllowed(const Location* loc, const std::string& method)
+{
+    if (!loc || loc->methods.empty())
+        return true;
+
+    for (size_t i = 0; i < loc->methods.size(); ++i)
+    {
+        if (loc->methods[i] == method)
+            return true;
+    }
+    return false;
+}
+
+static std::string getQueryString(const std::string& uri)
+{
+    size_t pos = uri.find('?');
+    if (pos == std::string::npos)
+        return "";
+
+    size_t end = uri.find('#', pos + 1);
+    if (end == std::string::npos)
+        return uri.substr(pos + 1);
+    return uri.substr(pos + 1, end - (pos + 1));
+}
+
+static void finalizeResponseHeaders(Response& res)
+{
+    if (res.headers.find("Content-Type") == res.headers.end())
+        res.headers["Content-Type"] = "text/html; charset=UTF-8";
+
+    if (res.headers.find("Content-Length") == res.headers.end())
+    {
+        std::stringstream ss;
+        ss << res.body.size();
+        res.headers["Content-Length"] = ss.str();
+    }
+}
+
+static std::string generateAutoindexBody(const std::string& uri, const std::string& fsPath)
+{
+    DIR* dir = opendir(fsPath.c_str());
+    if (!dir)
+        return "";
+
+    std::stringstream body;
+    body << "<html><body><h1>Index of " << uri << "</h1><ul>";
+
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != NULL)
+    {
+        std::string name = entry->d_name;
+        if (name == "." || name == "..")
+            continue;
+
+        body << "<li><a href=\"" << uri;
+        if (!uri.empty() && uri[uri.size() - 1] != '/')
+            body << "/";
+        body << name << "\">" << name << "</a></li>";
+    }
+
+    body << "</ul></body></html>";
+    closedir(dir);
+    return body.str();
 }
 
 int Server::findServerIndex(int listenSocket) const {
@@ -261,6 +349,10 @@ void Server::parseRequest(Client& client)
 
         req.headers[key] = value;
     }
+
+    size_t bodyPos = raw.find("\r\n\r\n");
+    if (bodyPos != std::string::npos)
+        req.body = raw.substr(bodyPos + 4);
 }
 
 
@@ -347,21 +439,46 @@ Response Server::buildResponse(Client& client)
         Response res;
         res.statusCode = 404;
         res.body = "404 Not Found";
+        finalizeResponseHeaders(res);
         return res;
     }
 
-    if (req.method == "GET")
-        return handleGet(req, config, loc);
+    if (!isMethodAllowed(loc, req.method))
+    {
+        Response res;
+        res.statusCode = 405;
+        res.body = "Method Not Allowed";
+        finalizeResponseHeaders(res);
+        return res;
+    }
 
-    if (req.method == "POST")
-        return handlePost(req, config, loc);
-
-    if (req.method == "DELETE")
-        return handleDelete(req, config, loc);
+    if (config.client_max_body_size > 0 && req.body.size() > config.client_max_body_size)
+    {
+        Response res;
+        res.statusCode = 413;
+        res.body = "Payload Too Large";
+        finalizeResponseHeaders(res);
+        return res;
+    }
 
     Response res;
-    res.statusCode = 405;
-    res.body = "Method Not Allowed";
+
+    if (req.method == "GET")
+        res = handleGet(req, config, loc);
+
+    else if (req.method == "POST")
+        res = handlePost(req, config, loc);
+
+    else if (req.method == "DELETE")
+        res = handleDelete(req, config, loc);
+
+    else
+    {
+        res.statusCode = 405;
+        res.body = "Method Not Allowed";
+    }
+
+    finalizeResponseHeaders(res);
     return res;
 }
 
@@ -431,6 +548,39 @@ Response Server::handleGet(const Request& req, const ServerConfig& config, Locat
     if (isCgiRequest(path, loc))
         return executeCgi(req, path, loc);
 
+    struct stat st;
+    if (stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
+    {
+        std::string indexPath = path;
+        if (!index.empty())
+        {
+            if (!indexPath.empty() && indexPath[indexPath.size() - 1] != '/')
+                indexPath += "/";
+            indexPath += index;
+
+            std::ifstream indexFile(indexPath.c_str());
+            if (indexFile.is_open())
+            {
+                std::stringstream indexBuffer;
+                indexBuffer << indexFile.rdbuf();
+                res.statusCode = 200;
+                res.body = indexBuffer.str();
+                return res;
+            }
+        }
+
+        if (loc->autoindex)
+        {
+            res.statusCode = 200;
+            res.body = generateAutoindexBody(uri, path);
+            return res;
+        }
+
+        res.statusCode = 403;
+        res.body = "403 Forbidden";
+        return res;
+    }
+
     std::ifstream file(path.c_str());
 
     if (!file.is_open())
@@ -465,6 +615,33 @@ Response Server::handlePost(const Request& req, const ServerConfig& config, Loca
     if (isCgiRequest(path, loc))
         return executeCgi(req, path, loc);
 
+    if (!loc->upload_path.empty())
+    {
+        static unsigned long uploadCounter = 0;
+        uploadCounter++;
+
+        std::stringstream filePath;
+        filePath << loc->upload_path;
+        if (loc->upload_path[loc->upload_path.size() - 1] != '/')
+            filePath << "/";
+        filePath << "upload_" << time(NULL) << "_" << uploadCounter;
+
+        std::ofstream out(filePath.str().c_str(), std::ios::binary);
+        if (!out.is_open())
+        {
+            res.statusCode = 500;
+            res.body = "Upload failed";
+            return res;
+        }
+
+        out << req.body;
+        out.close();
+
+        res.statusCode = 201;
+        res.body = "Created";
+        return res;
+    }
+
     res.statusCode = 200;
     res.body = "POST received";
 
@@ -494,24 +671,58 @@ Response Server::handleDelete(const Request& req, const ServerConfig& config, Lo
 
 Response Server::executeCgi(const Request& req, const std::string& scriptPath, Location* loc)
 {
-    (void)req; // supprime warning unused-parameter
-
     Response res;
     int pipefd[2];
-    pipe(pipefd);
+    if (pipe(pipefd) < 0)
+    {
+        res.statusCode = 500;
+        res.body = "CGI pipe error";
+        return res;
+    }
 
     pid_t pid = fork();
+    if (pid < 0)
+    {
+        close(pipefd[0]);
+        close(pipefd[1]);
+        res.statusCode = 500;
+        res.body = "CGI fork error";
+        return res;
+    }
+
     if (pid == 0)
     {
         dup2(pipefd[1], STDOUT_FILENO);
+        dup2(pipefd[1], STDERR_FILENO);
         close(pipefd[0]);
+        close(pipefd[1]);
 
-        char* argv[3];
-        argv[0] = const_cast<char*>(loc->cgi_path.c_str());
-        argv[1] = const_cast<char*>(scriptPath.c_str());
-        argv[2] = NULL;
+        std::string requestMethod = "REQUEST_METHOD=" + req.method;
+        std::string queryString = "QUERY_STRING=" + getQueryString(req.uri);
+        std::string serverProtocol = "SERVER_PROTOCOL=" + req.version;
 
-        execve(argv[0], argv, NULL);
+        char* envp[4];
+        envp[0] = const_cast<char*>(requestMethod.c_str());
+        envp[1] = const_cast<char*>(queryString.c_str());
+        envp[2] = const_cast<char*>(serverProtocol.c_str());
+        envp[3] = NULL;
+
+        if (!loc->cgi_path.empty())
+        {
+            char* argv[3];
+            argv[0] = const_cast<char*>(loc->cgi_path.c_str());
+            argv[1] = const_cast<char*>(scriptPath.c_str());
+            argv[2] = NULL;
+            execve(argv[0], argv, envp);
+        }
+        else
+        {
+            char* argv[2];
+            argv[0] = const_cast<char*>(scriptPath.c_str());
+            argv[1] = NULL;
+            execve(argv[0], argv, envp);
+        }
+
         exit(1);
     }
 
@@ -525,15 +736,18 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
         output.append(buffer, bytes);
 
     close(pipefd[0]);
-    waitpid(pid, NULL, 0);
+    int status = 0;
+    waitpid(pid, &status, 0);
+
+    if ((!WIFEXITED(status) || WEXITSTATUS(status) != 0) && output.empty())
+    {
+        res.statusCode = 500;
+        res.body = "CGI execution failed";
+        return res;
+    }
 
     res.statusCode = 200;
     res.body = output;
-
-    std::stringstream ss;
-    ss << res.body.size();
-    res.headers["Content-Length"] = ss.str();
-    res.headers["Content-Type"] = "text/html; charset=UTF-8";
 
     return res;
 }
