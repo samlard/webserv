@@ -123,50 +123,133 @@ int Server::init(Config &config) {
     return 0;
 }
 
-void Server::run() {
-    while (_running) {
+// void Server::run() {
+//     while (_running) {
 
-        int ret = poll(_fds.data(), _fds.size(), -1);
-        if (ret < 0) {
-            if (errno == EINTR) continue;
+//         int ret = poll(_fds.data(), _fds.size(), -1);
+//         if (ret < 0) {
+//             if (errno == EINTR) continue;
+//             perror("poll");
+//             break;
+//         }
+
+//         for (int i = (int)_fds.size() - 1; i >= 0; i--) {
+//             int fd = _fds[i].fd;
+//             short revents = _fds[i].revents;
+
+//             if (revents == 0) continue;
+
+//             bool isListenSocket = false;
+//             for (size_t j = 0; j < _listenSockets.size(); j++) {
+//                 if (_listenSockets[j] == fd) {
+//                     isListenSocket = true;
+//                     break;
+//                 }
+//             }
+
+//             // Nouvelle connexion
+//             if (isListenSocket && (revents & POLLIN)) {
+//                 acceptNewClient(fd);
+//                 continue;
+//             }
+
+//             // Données reçues
+//             if (!isListenSocket && (revents & POLLIN)) {
+//                 handleClientRead(i);
+//             }
+
+//             // Envoi de la réponse
+//             if (!isListenSocket && (_fds[i].revents & POLLOUT)) {
+//                 Client &client = _clients[fd];
+//                 std::string responseStr = client.getResponse().toString(); // copie locale
+
+//                 ssize_t sent = send(fd, responseStr.c_str(), responseStr.size(), 0);
+
+//                 if (sent < 0) {
+//                     if (errno != EAGAIN && errno != EWOULDBLOCK) {
+//                         close(fd);
+//                         _clients.erase(fd);
+//                         _fds.erase(_fds.begin() + i);
+//                     }
+//                     continue;
+//                 }
+
+//                 // Supprime ce qui a été envoyé
+//                 client.getResponse().body.erase(0, sent);
+
+//                 // Si tout a été envoyé, on arrête POLLOUT
+//                 if (client.getResponse().body.empty()) {
+//                     _fds[i].events &= ~POLLOUT;
+//                     close(fd);
+//                     _clients.erase(fd);
+//                     _fds.erase(_fds.begin() + i);
+//                     continue;
+//                 }
+//             }
+
+//             // Gestion des erreurs
+//             if (_fds[i].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+//                 close(fd);
+//                 _clients.erase(fd);
+//                 _fds.erase(_fds.begin() + i);
+//             }
+//         }
+//     }
+// }
+
+void Server::run()
+{
+    while (_running)
+    {
+        int ret = poll(&_fds[0], _fds.size(), -1);
+
+        if (ret < 0)
+        {
+            if (errno == EINTR)
+                continue;
             perror("poll");
             break;
         }
 
-        for (int i = (int)_fds.size() - 1; i >= 0; i--) {
+        for (int i = (int)_fds.size() - 1; i >= 0; --i)
+        {
             int fd = _fds[i].fd;
             short revents = _fds[i].revents;
 
-            if (revents == 0) continue;
+            if (revents == 0)
+                continue;
 
             bool isListenSocket = false;
-            for (size_t j = 0; j < _listenSockets.size(); j++) {
-                if (_listenSockets[j] == fd) {
+            for (size_t j = 0; j < _listenSockets.size(); ++j)
+            {
+                if (_listenSockets[j] == fd)
+                {
                     isListenSocket = true;
                     break;
                 }
             }
 
-            // Nouvelle connexion
-            if (isListenSocket && (revents & POLLIN)) {
+            if (isListenSocket && (revents & POLLIN))
+            {
                 acceptNewClient(fd);
                 continue;
             }
 
-            // Données reçues
-            if (!isListenSocket && (revents & POLLIN)) {
+            if (!isListenSocket && (revents & POLLIN))
+            {
                 handleClientRead(i);
             }
 
-            // Envoi de la réponse
-            if (!isListenSocket && (_fds[i].revents & POLLOUT)) {
+            if (!isListenSocket && (_fds[i].revents & POLLOUT))
+            {
                 Client &client = _clients[fd];
-                std::string responseStr = client.getResponse().toString(); // copie locale
+                std::string responseStr = client.getResponse().toString();
 
                 ssize_t sent = send(fd, responseStr.c_str(), responseStr.size(), 0);
-
-                if (sent < 0) {
-                    if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                if (sent < 0)
+                {
+                    if (errno != EAGAIN && errno != EWOULDBLOCK)
+                    {
                         close(fd);
                         _clients.erase(fd);
                         _fds.erase(_fds.begin() + i);
@@ -174,24 +257,21 @@ void Server::run() {
                     continue;
                 }
 
-                // Supprime ce qui a été envoyé
-                client.getResponse().body.erase(0, sent);
-
-                // Si tout a été envoyé, on arrête POLLOUT
-                if (client.getResponse().body.empty()) {
-                    _fds[i].events &= ~POLLOUT;
-                    close(fd);
-                    _clients.erase(fd);
-                    _fds.erase(_fds.begin() + i);
-                    continue;
-                }
-            }
-
-            // Gestion des erreurs
-            if (_fds[i].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+                // This server currently sends one response per request then closes.
                 close(fd);
                 _clients.erase(fd);
                 _fds.erase(_fds.begin() + i);
+                continue;
+            }
+
+            if (revents & (POLLERR | POLLHUP | POLLNVAL))
+            {
+                if (!isListenSocket)
+                {
+                    close(fd);
+                    _clients.erase(fd);
+                    _fds.erase(_fds.begin() + i);
+                }
             }
         }
     }
@@ -285,31 +365,62 @@ void Server::parseRequest(Client& client)
     }
 }
 
+// void Server::handleClientRead(size_t i)
+// {
+//     int fd = _fds[i].fd;
+
+//     char buffer[4096];
+
+//     int bytes = recv(fd, buffer, sizeof(buffer), 0);
+
+//     if (bytes <= 0)
+//         return;
+
+//     Client& client = _clients[fd];
+
+//     client.appendToBuffer(std::string(buffer, bytes));
+
+//     if (isRequestComplete(client.getBuffer()))
+//     {
+//         client.markRequestComplete();
+
+//         parseRequest(client);
+//         Response res = buildResponse(client);
+
+//         client.getResponse() = res;
+
+//         for (size_t j = 0; j < _fds.size(); j++)
+//         {
+//             if (_fds[j].fd == fd)
+//             {
+//                 _fds[j].events |= POLLOUT;
+//                 break;
+//             }
+//         }
+//     }
+// }
+
 void Server::handleClientRead(size_t i)
 {
     int fd = _fds[i].fd;
-
-    char buffer[4096];
+    char buffer[BUFFER_SIZE];
 
     int bytes = recv(fd, buffer, sizeof(buffer), 0);
-
     if (bytes <= 0)
         return;
 
     Client& client = _clients[fd];
-
     client.appendToBuffer(std::string(buffer, bytes));
 
     if (isRequestComplete(client.getBuffer()))
     {
         client.markRequestComplete();
-
         parseRequest(client);
-        Response res = buildResponse(client);
 
+        Response res = buildResponse(client);
         client.getResponse() = res;
 
-        for (size_t j = 0; j < _fds.size(); j++)
+        for (size_t j = 0; j < _fds.size(); ++j)
         {
             if (_fds[j].fd == fd)
             {
@@ -359,7 +470,6 @@ void Server::acceptNewClient(int listenSocket) {
               << _serverConfigs[serverIndex].host << ":"
               << _serverConfigs[serverIndex].port << std::endl;
 }
-
 
 Response Server::buildResponse(Client& client)
 {
@@ -412,21 +522,22 @@ bool Server::isCgiRequest(const std::string& path, Location* loc)
     return path.substr(path.size() - loc->cgi_extension.size()) == loc->cgi_extension;
 }
 
-Response Server::handleGet(const Request& req, const ServerConfig& /*config*/, Location* loc)
+Response Server::handleGet(const Request& req, const ServerConfig& config, Location* loc)
 {
     Response res;
 
-   std::string uri = req.uri;
+    std::string uri = req.uri;
+    const std::string root = !loc->root.empty() ? loc->root : config.root;
+    const std::string index = !loc->index.empty() ? loc->index : config.index;
 
-   std::cout << "Requested URI: " << uri << std::endl;
+    std::cout << "Requested URI: " << uri << std::endl;
 
-    // Si c'est "/", redirige vers index.html
-    if (uri == "/" && !loc->index.empty()) {
-        uri = "/" + loc->index;
+    // If URI is root, serve the configured index file.
+    if (uri == "/" && !index.empty()) {
+        uri = "/" + index;
     }
 
-
-    std::string path = loc->root + uri;
+    std::string path = root + uri;
 
     std::cout << "Requested I: " << uri << std::endl;
 
@@ -452,17 +563,16 @@ Response Server::handleGet(const Request& req, const ServerConfig& /*config*/, L
     std::stringstream ss;
     ss << res.body.size();
     res.headers["Content-Length"] = ss.str();
-    res.headers["Content-Type"] = "text/html";
+    res.headers["Content-Type"] = "text/html; charset=UTF-8";
 
     return res;
 }
 
 Response Server::handlePost(const Request& req, const ServerConfig& config, Location* loc)
 {
-    (void)config;
-
     Response res;
-    std::string path = loc->root + req.uri;
+    std::string root = !loc->root.empty() ? loc->root : config.root;
+    std::string path = root + req.uri;
 
     if (isCgiRequest(path, loc))
         return executeCgi(req, path, loc);
@@ -475,10 +585,9 @@ Response Server::handlePost(const Request& req, const ServerConfig& config, Loca
 
 Response Server::handleDelete(const Request& req, const ServerConfig& config, Location* loc)
 {
-    (void)config;
-
     Response res;
-    std::string path = loc->root + req.uri;
+    std::string root = !loc->root.empty() ? loc->root : config.root;
+    std::string path = root + req.uri;
 
     if (remove(path.c_str()) == 0)
     {
@@ -535,7 +644,7 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
     std::stringstream ss;
     ss << res.body.size();
     res.headers["Content-Length"] = ss.str();
-    res.headers["Content-Type"] = "text/html";
+    res.headers["Content-Type"] = "text/html; charset=UTF-8";
 
     return res;
 }

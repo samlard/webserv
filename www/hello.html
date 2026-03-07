@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Hello Page</title>
+
+<style>
+
+body {
+    margin:0;
+    overflow:hidden;
+    background:#87CEEB;
+    font-family:Arial, sans-serif;
+}
+
+h1 {
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%, -50%);
+    color:white;
+    font-size:60px;
+    z-index:10;
+}
+
+.goat {
+    position:absolute;
+    bottom:20px;
+    font-size:50px;
+    animation: moveGoat linear infinite;
+}
+
+.goat:nth-child(2) {
+    bottom:100px;
+    animation-duration:12s;
+}
+
+.goat:nth-child(3) {
+    bottom:180px;
+    animation-duration:15s;
+}
+
+.goat:nth-child(4) {
+    bottom:260px;
+    animation-duration:10s;
+}
+
+@keyframes moveGoat {
+    from {
+        left:-10%;
+    }
+    to {
+        left:110%;
+    }
+}
+
+</style>
+</head>
+
+<body>
+
+<h1>HELLO SAMI & MAX</h1>
+
+<div class="goat">🐐</div>
+<div class="goat">🐐</div>
+<div class="goat">🐐</div>
+<div class="goat">🐐</div>
+
+</body>
+</html>
