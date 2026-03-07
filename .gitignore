@@ -16,3 +16,4 @@ Thumbs.db
 # Test files
 /tmp/
 test_uploads/
+www/uploads/upload_*

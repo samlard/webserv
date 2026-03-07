@@ -19,7 +19,7 @@ bool Config::is_valid_server_directive(const std::string& key) {
 bool Config::is_valid_location_directive(const std::string& key) {
     return key == "root" || key == "index" || key == "allow_methods" ||
            key == "methods" || key == "autoindex" || key == "upload_path" ||
-           key == "cgi_extension" || key == "cgi_path";
+           key == "cgi_extension" || key == "cgi_path" || key == "return";
 }
 
 std::string trim(const std::string& str) {
@@ -138,6 +138,7 @@ int Config::fill_location(std::istringstream &iss, Location &loc, std::string &e
                 return 1;
             }
             // loc.autoindex = (value == "on");
+            loc.autoindex = (value == "on");
         }
         
         // cgi_extension : doit commencer par .
@@ -160,6 +161,24 @@ int Config::fill_location(std::istringstream &iss, Location &loc, std::string &e
                 return 1;
             }
             loc.cgi_path = value;
+        }
+
+        // upload_path : destination for uploaded files
+        else if (key == "upload_path") {
+            if (value.empty()) {
+                error = "upload_path requires a path in location " + loc.path;
+                return 1;
+            }
+            loc.upload_path = value;
+        }
+
+        // return : redirect URL
+        else if (key == "return") {
+            if (value.empty()) {
+                error = "return requires a URL in location " + loc.path;
+                return 1;
+            }
+            loc.redirect = value;
         }
     }
     
@@ -260,8 +279,16 @@ int Config::fill_server(std::string &ServerBlock, std::string &error)
             serv.root = value;
         } else if (key == "index") {
             serv.index = value;
+        } else if (key == "error_page") {
+            std::istringstream ep(value);
+            int code;
+            std::string page;
+            if (ep >> code >> page)
+                serv.error_pages[code] = page;
+        } else if (key == "client_max_body_size") {
+            serv.client_max_body_size = (size_t)atol(value.c_str());
         }
-        // autres directives optionnelles : error_page, client_max_body_size
+        // autres directives optionnelles ignorées
     }
 
     // Validation finale
