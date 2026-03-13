@@ -486,6 +486,7 @@ Location* Server::matchLocation(const ServerConfig& config, const std::string& u
 {
     Location* bestMatch = NULL;
     size_t bestLen = 0;
+    std::cout << uri << std::endl;
     std::string cleanUri = stripUriSuffix(uri);
 
     if (cleanUri.empty())
