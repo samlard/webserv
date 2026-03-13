@@ -38,14 +38,13 @@ public:
     void parseRequest(Client& client);
     Response buildResponse(Client& client);
     Location* matchLocation(const ServerConfig& config, const std::string& uri);
-
     Response handleGet(const Request& req, const ServerConfig& config, Location* loc);
     Response handlePost(const Request& req, const ServerConfig& config, Location* loc);
     Response handleDelete(const Request& req, const ServerConfig& config, Location* loc);
-
     bool isCgiRequest(const std::string& path, Location* loc);
-
     Response executeCgi(const Request& req, const std::string& scriptPath, Location* loc);
+    bool isRequestComplete(const std::string& buffer);
+
 
 };
 

@@ -27,13 +27,12 @@ public:
     int getServerIndex() const;
 
     std::string& getBuffer();
-    bool isRequestComplete() const;
-
+    void appendToBuffer(const std::string& data);
     Request& getRequest();
     Response& getResponse();
 
-    void appendToBuffer(const std::string& data);
     void markRequestComplete();
+    bool isRequestComplete() const;
 
     void clear();
 };

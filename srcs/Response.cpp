@@ -1,5 +1,7 @@
 #include "Response.hpp"
 #include <sstream>
+#include "../includes/Server.hpp"
+#include "../includes/Utils.hpp"
 
 static const char* getReasonPhrase(int statusCode)
 {
@@ -30,4 +32,59 @@ std::string Response::toString() const {
     ss << body;
 
     return ss.str();
+}
+
+Response Server::buildResponse(Client& client)
+{
+    Request& req = client.getRequest();
+    ServerConfig& config = _serverConfigs[client.getServerIndex()];
+
+    Location* loc = matchLocation(config, req.uri);
+
+    if (!loc)
+    {
+        Response res;
+        res.statusCode = 404;
+        res.body = "404 Not Found";
+        finalizeResponseHeaders(res);
+        return res;
+    }
+
+    if (!isMethodAllowed(loc, req.method))
+    {
+        Response res;
+        res.statusCode = 405;
+        res.body = "Method Not Allowed";
+        finalizeResponseHeaders(res);
+        return res;
+    }
+
+    if (config.client_max_body_size > 0 && req.body.size() > config.client_max_body_size)
+    {
+        Response res;
+        res.statusCode = 413;
+        res.body = "Payload Too Large";
+        finalizeResponseHeaders(res);
+        return res;
+    }
+
+    Response res;
+
+    if (req.method == "GET")
+        res = handleGet(req, config, loc);
+
+    else if (req.method == "POST")
+        res = handlePost(req, config, loc);
+
+    else if (req.method == "DELETE")
+        res = handleDelete(req, config, loc);
+
+    else
+    {
+        res.statusCode = 405;
+        res.body = "Method Not Allowed";
+    }
+
+    finalizeResponseHeaders(res);
+    return res;
 }
