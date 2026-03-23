@@ -16,16 +16,68 @@ static std::string getQueryString(const std::string& uri)
     return uri.substr(pos + 1, end - (pos + 1));
 }
 
+static std::string normalizeLocationPath(const std::string& path)
+{
+    if (path.empty())
+        return "/";
+
+    if (path.size() > 1 && path[path.size() - 1] == '/')
+        return path.substr(0, path.size() - 1);
+
+    return path;
+}
+
 Response Server::executeCgi(const Request& req, const std::string& scriptPath, Location* loc)
 {
     Response res;
     int pipefd[2];
+    struct stat st;
+
+    if (stat(scriptPath.c_str(), &st) != 0 || !S_ISREG(st.st_mode))
+    {
+        std::cerr << "[CGI] script not found or not a regular file: " << scriptPath << std::endl;
+        res.statusCode = 404;
+        res.body = "CGI script not found";
+        return res;
+    }
+
+    if (access(scriptPath.c_str(), R_OK) != 0)
+    {
+        std::cerr << "[CGI] script is not readable: " << scriptPath << std::endl;
+        res.statusCode = 403;
+        res.body = "CGI script is not readable";
+        return res;
+    }
+
+    if (!loc->cgi_path.empty() && access(loc->cgi_path.c_str(), X_OK) != 0)
+    {
+        std::cerr << "[CGI] interpreter is not executable: " << loc->cgi_path << std::endl;
+        res.statusCode = 500;
+        res.body = "CGI interpreter is not executable";
+        return res;
+    }
+
+    if (loc->cgi_path.empty() && access(scriptPath.c_str(), X_OK) != 0)
+    {
+        std::cerr << "[CGI] script is not executable and no cgi_path provided: " << scriptPath << std::endl;
+        res.statusCode = 403;
+        res.body = "CGI script is not executable";
+        return res;
+    }
+
+    std::cout << "[CGI] executing script=" << scriptPath
+              << " method=" << req.method
+              << " uri=" << req.uri
+              << " interpreter=" << (loc->cgi_path.empty() ? "<shebang>" : loc->cgi_path)
+              << std::endl;
+
     if (pipe(pipefd) < 0)
     {
         res.statusCode = 500;
         res.body = "CGI pipe error";
         return res;
     }
+
     pid_t pid = fork();
     if (pid < 0)
     {
@@ -35,10 +87,12 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
         res.body = "CGI fork error";
         return res;
     }
+
     if (pid == 0)
     {
         dup2(pipefd[1], STDOUT_FILENO);
         dup2(pipefd[1], STDERR_FILENO);
+
         close(pipefd[0]);
         close(pipefd[1]);
 
@@ -68,6 +122,7 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
             execve(argv[0], argv, envp);
         }
 
+        perror("execve failed");
         exit(1);
     }
 
@@ -77,10 +132,11 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
     int bytes;
     std::string output;
 
-    while ((bytes = read(pipefd[0], buffer, 4096)) > 0)
+    while ((bytes = read(pipefd[0], buffer, sizeof(buffer))) > 0)
         output.append(buffer, bytes);
 
     close(pipefd[0]);
+
     int status = 0;
     waitpid(pid, &status, 0);
 
@@ -91,8 +147,61 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
         return res;
     }
 
-    res.statusCode = 200;
-    res.body = output;
+    size_t headerEnd = output.find("\r\n\r\n");
+    size_t headerDelimiterLen = 4;
+    if (headerEnd == std::string::npos)
+    {
+        headerEnd = output.find("\n\n");
+        headerDelimiterLen = 2;
+    }
+
+    if (headerEnd == std::string::npos)
+    {
+        std::cerr << "[CGI] invalid response, missing header/body separator. Raw output: "
+                  << output.substr(0, 200) << std::endl;
+        res.statusCode = 500;
+        res.body = "Invalid CGI response";
+        return res;
+    }
+
+    std::string headerPart = output.substr(0, headerEnd);
+    std::string bodyPart = output.substr(headerEnd + headerDelimiterLen);
+
+    std::istringstream headerStream(headerPart);
+    std::string line;
+
+    while (std::getline(headerStream, line))
+    {
+        if (!line.empty() && line[line.size() - 1] == '\r')
+            line.erase(line.size() - 1);
+
+        size_t sep = line.find(':');
+        if (sep != std::string::npos)
+        {
+            std::string key = line.substr(0, sep);
+            std::string value = line.substr(sep + 1);
+            while (!value.empty() && (value[0] == ' ' || value[0] == '\t'))
+                value.erase(0, 1);
+            res.headers[key] = value;
+        }
+    }
+
+    if (res.headers.find("Status") != res.headers.end())
+    {
+        std::istringstream ss(res.headers["Status"]);
+        ss >> res.statusCode;
+        res.headers.erase("Status");
+    }
+    else
+    {
+        res.statusCode = 200;
+    }
+
+    res.body = bodyPart;
+
+    std::stringstream ss;
+    ss << res.body.size();
+    res.headers["Content-Length"] = ss.str();
 
     return res;
 }
@@ -115,9 +224,14 @@ Response Server::handleGet(const Request& req, const ServerConfig& config, Locat
     std::string path = buildPathFromLocation(uri, root, loc);
 
     std::cout << "Requested I: " << uri << std::endl;
+    std::cout << "Resolved path: " << path << std::endl;
 
-    if (isCgiRequest(path, loc))
+    if (isCgiRequest(uri, loc))
+    {
+        std::cout << "[CGI] GET detected as CGI for uri=" << uri
+                  << " ext=" << loc->cgi_extension << std::endl;
         return executeCgi(req, path, loc);
+    }
 
     struct stat st;
     if (stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
@@ -183,8 +297,12 @@ Response Server::handlePost(const Request& req, const ServerConfig& config, Loca
     std::string root = !loc->root.empty() ? loc->root : config.root;
     std::string path = buildPathFromLocation(uri, root, loc);
 
-    if (isCgiRequest(path, loc))
+    if (isCgiRequest(uri, loc))
+    {
+        std::cout << "[CGI] POST detected as CGI for uri=" << uri
+                  << " ext=" << loc->cgi_extension << std::endl;
         return executeCgi(req, path, loc);
+    }
 
     if (!loc->upload_path.empty())
     {
@@ -252,15 +370,19 @@ Location* Server::matchLocation(const ServerConfig& config, const std::string& u
 
     for (size_t i = 0; i < config.locations.size(); i++)
     {
-        const std::string& locPath = config.locations[i].path;
+        const std::string locPath = normalizeLocationPath(config.locations[i].path);
 
         if (locPath.empty())
             continue;
 
-        if (cleanUri.find(locPath) != 0)
-            continue;
+        bool isBoundaryMatch = false;
+        if (locPath == "/")
+            isBoundaryMatch = true;
+        else if (cleanUri == locPath)
+            isBoundaryMatch = true;
+        else if (cleanUri.find(locPath + "/") == 0)
+            isBoundaryMatch = true;
 
-        bool isBoundaryMatch = (locPath == "/" || cleanUri.size() == locPath.size() || cleanUri[locPath.size()] == '/');
         if (!isBoundaryMatch)
             continue;
 
@@ -276,11 +398,23 @@ Location* Server::matchLocation(const ServerConfig& config, const std::string& u
 
 bool Server::isCgiRequest(const std::string& path, Location* loc)
 {
+    if (!loc)
+        return false;
+
     if (loc->cgi_extension.empty())
         return false;
 
-    if (path.size() < loc->cgi_extension.size())
+    std::string cleanPath = stripUriSuffix(path);
+
+    if (!cleanPath.empty() && cleanPath[cleanPath.size() - 1] == '/')
+        cleanPath.erase(cleanPath.size() - 1);
+
+    if (cleanPath.size() < loc->cgi_extension.size())
         return false;
 
-    return path.substr(path.size() - loc->cgi_extension.size()) == loc->cgi_extension;
+    bool matched = cleanPath.substr(cleanPath.size() - loc->cgi_extension.size()) == loc->cgi_extension;
+    std::cout << "[CGI] isCgiRequest path=" << cleanPath
+              << " extension=" << loc->cgi_extension
+              << " matched=" << (matched ? "yes" : "no") << std::endl;
+    return matched;
 }

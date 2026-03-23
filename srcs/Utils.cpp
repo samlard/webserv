@@ -33,22 +33,41 @@ std::string stripUriSuffix(const std::string& uri)
     return uri.substr(0, pos);
 }
 
+static std::string joinPath(const std::string& base, const std::string& tail)
+{
+    if (base.empty())
+        return tail;
+
+    if (tail.empty())
+        return base;
+
+    if (base[base.size() - 1] == '/' && tail[0] == '/')
+        return base.substr(0, base.size() - 1) + tail;
+
+    if (base[base.size() - 1] != '/' && tail[0] != '/')
+        return base + "/" + tail;
+
+    return base + tail;
+}
+
 std::string buildPathFromLocation(const std::string& uriPath, const std::string& root, const Location* loc)
 {
-    if (!loc || loc->path.empty() || loc->path == "/")
-        return root + uriPath;
-
-    if (uriPath.find(loc->path) == 0)
+    if (loc && !loc->root.empty() && !loc->path.empty() && loc->path != "/")
     {
-        std::string suffix = uriPath.substr(loc->path.size());
-        if (suffix.empty())
-            suffix = "/";
-        else if (suffix[0] != '/')
-            suffix = "/" + suffix;
-        return root + suffix;
+        bool boundaryMatch = (uriPath == loc->path);
+        if (!boundaryMatch && uriPath.size() > loc->path.size() && uriPath.find(loc->path) == 0 && uriPath[loc->path.size()] == '/')
+            boundaryMatch = true;
+
+        if (boundaryMatch)
+        {
+            std::string suffix = uriPath.substr(loc->path.size());
+            if (suffix.empty())
+                suffix = "/";
+            return joinPath(root, suffix);
+        }
     }
 
-    return root + uriPath;
+    return joinPath(root, uriPath);
 }
 
 std::string generateAutoindexBody(const std::string& uri, const std::string& fsPath)

@@ -4,7 +4,7 @@
 import cgitb
 cgitb.enable()
 
-
+print("Content-Type: text/html")
 print()
 
 print("""<!DOCTYPE html>
