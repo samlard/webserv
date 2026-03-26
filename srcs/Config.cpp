@@ -144,15 +144,22 @@ int Config::fill_location(std::istringstream &iss, Location &loc, std::string &e
         
         // cgi_extension : doit commencer par .
         else if (key == "cgi_extension") {
-            if (value.empty()) {
-                error = "cgi_extension requires an extension in location " + loc.path;
+            std::istringstream extStream(value);
+            std::string ext;
+            while (extStream >> ext) {
+                if (ext.empty()) {
+                    continue;
+                }
+                if (ext[0] != '.') {
+                    error = "cgi_extension must start with '.', found: " + ext + " in location " + loc.path;
+                    return 1;
+                }
+                loc.cgi_extensions.push_back(ext);
+            }
+            if (loc.cgi_extensions.empty()) {
+                error = "cgi_extension requires at least one extension in location " + loc.path;
                 return 1;
             }
-            if (value[0] != '.') {
-                error = "cgi_extension must start with '.', found: " + value + " in location " + loc.path;
-                return 1;
-            }
-            loc.cgi_extension = value;
         }
         
         // cgi_path : path exécutable

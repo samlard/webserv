@@ -30,7 +30,8 @@ static std::string normalizeLocationPath(const std::string& path)
 Response Server::executeCgi(const Request& req, const std::string& scriptPath, Location* loc)
 {
     Response res;
-    int pipefd[2];
+    int outPipe[2];
+    int inPipe[2];
     struct stat st;
 
     if (stat(scriptPath.c_str(), &st) != 0 || !S_ISREG(st.st_mode))
@@ -71,18 +72,29 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
               << " interpreter=" << (loc->cgi_path.empty() ? "<shebang>" : loc->cgi_path)
               << std::endl;
 
-    if (pipe(pipefd) < 0)
+    if (pipe(outPipe) < 0)
     {
         res.statusCode = 500;
-        res.body = "CGI pipe error";
+        res.body = "CGI output pipe error";
+        return res;
+    }
+
+    if (pipe(inPipe) < 0)
+    {
+        close(outPipe[0]);
+        close(outPipe[1]);
+        res.statusCode = 500;
+        res.body = "CGI input pipe error";
         return res;
     }
 
     pid_t pid = fork();
     if (pid < 0)
     {
-        close(pipefd[0]);
-        close(pipefd[1]);
+        close(outPipe[0]);
+        close(outPipe[1]);
+        close(inPipe[0]);
+        close(inPipe[1]);
         res.statusCode = 500;
         res.body = "CGI fork error";
         return res;
@@ -90,21 +102,34 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
 
     if (pid == 0)
     {
-        dup2(pipefd[1], STDOUT_FILENO);
-        dup2(pipefd[1], STDERR_FILENO);
+        dup2(outPipe[1], STDOUT_FILENO);
+        dup2(outPipe[1], STDERR_FILENO);
+        dup2(inPipe[0], STDIN_FILENO);
 
-        close(pipefd[0]);
-        close(pipefd[1]);
+        close(outPipe[0]);
+        close(outPipe[1]);
+        close(inPipe[0]);
+        close(inPipe[1]);
 
         std::string requestMethod = "REQUEST_METHOD=" + req.method;
         std::string queryString = "QUERY_STRING=" + getQueryString(req.uri);
         std::string serverProtocol = "SERVER_PROTOCOL=" + req.version;
+        std::stringstream clss;
+        clss << req.body.size();
+        std::string contentLength = "CONTENT_LENGTH=" + clss.str();
+        std::string contentTypeValue = "text/plain";
+        std::map<std::string, std::string>::const_iterator contentTypeIt = req.headers.find("Content-Type");
+        if (contentTypeIt != req.headers.end() && !contentTypeIt->second.empty())
+            contentTypeValue = contentTypeIt->second;
+        std::string contentType = "CONTENT_TYPE=" + contentTypeValue;
 
-        char* envp[4];
+        char* envp[6];
         envp[0] = const_cast<char*>(requestMethod.c_str());
         envp[1] = const_cast<char*>(queryString.c_str());
         envp[2] = const_cast<char*>(serverProtocol.c_str());
-        envp[3] = NULL;
+        envp[3] = const_cast<char*>(contentLength.c_str());
+        envp[4] = const_cast<char*>(contentType.c_str());
+        envp[5] = NULL;
 
         if (!loc->cgi_path.empty())
         {
@@ -126,16 +151,31 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
         exit(1);
     }
 
-    close(pipefd[1]);
+    close(outPipe[1]);
+    close(inPipe[0]);
+
+    if (!req.body.empty())
+    {
+        size_t written = 0;
+        while (written < req.body.size())
+        {
+            ssize_t n = write(inPipe[1], req.body.c_str() + written, req.body.size() - written);
+            if (n <= 0)
+                break;
+            written += static_cast<size_t>(n);
+        }
+    }
+
+    close(inPipe[1]);
 
     char buffer[4096];
     int bytes;
     std::string output;
 
-    while ((bytes = read(pipefd[0], buffer, sizeof(buffer))) > 0)
+    while ((bytes = read(outPipe[0], buffer, sizeof(buffer))) > 0)
         output.append(buffer, bytes);
 
-    close(pipefd[0]);
+    close(outPipe[0]);
 
     int status = 0;
     waitpid(pid, &status, 0);
@@ -228,8 +268,7 @@ Response Server::handleGet(const Request& req, const ServerConfig& config, Locat
 
     if (isCgiRequest(uri, loc))
     {
-        std::cout << "[CGI] GET detected as CGI for uri=" << uri
-                  << " ext=" << loc->cgi_extension << std::endl;
+        std::cout << "[CGI] GET detected as CGI for uri=" << uri << std::endl;
         return executeCgi(req, path, loc);
     }
 
@@ -299,8 +338,7 @@ Response Server::handlePost(const Request& req, const ServerConfig& config, Loca
 
     if (isCgiRequest(uri, loc))
     {
-        std::cout << "[CGI] POST detected as CGI for uri=" << uri
-                  << " ext=" << loc->cgi_extension << std::endl;
+        std::cout << "[CGI] POST detected as CGI for uri=" << uri << std::endl;
         return executeCgi(req, path, loc);
     }
 
@@ -401,7 +439,7 @@ bool Server::isCgiRequest(const std::string& path, Location* loc)
     if (!loc)
         return false;
 
-    if (loc->cgi_extension.empty())
+    if (loc->cgi_extensions.empty())
         return false;
 
     std::string cleanPath = stripUriSuffix(path);
@@ -409,12 +447,20 @@ bool Server::isCgiRequest(const std::string& path, Location* loc)
     if (!cleanPath.empty() && cleanPath[cleanPath.size() - 1] == '/')
         cleanPath.erase(cleanPath.size() - 1);
 
-    if (cleanPath.size() < loc->cgi_extension.size())
-        return false;
+    // Check if path ends with any of the configured CGI extensions
+    for (size_t i = 0; i < loc->cgi_extensions.size(); ++i) {
+        const std::string& ext = loc->cgi_extensions[i];
+        if (cleanPath.size() >= ext.size()) {
+            if (cleanPath.substr(cleanPath.size() - ext.size()) == ext) {
+                std::cout << "[CGI] isCgiRequest path=" << cleanPath
+                          << " extension=" << ext
+                          << " matched=yes" << std::endl;
+                return true;
+            }
+        }
+    }
 
-    bool matched = cleanPath.substr(cleanPath.size() - loc->cgi_extension.size()) == loc->cgi_extension;
     std::cout << "[CGI] isCgiRequest path=" << cleanPath
-              << " extension=" << loc->cgi_extension
-              << " matched=" << (matched ? "yes" : "no") << std::endl;
-    return matched;
+              << " matched=no" << std::endl;
+    return false;
 }

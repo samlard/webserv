@@ -19,7 +19,7 @@ class Location {
     	std::vector<std::string>       methods;
     	bool                        autoindex;
    		std::string                 redirect;
-    	std::string                 cgi_extension;
+    	std::vector<std::string>    cgi_extensions;
     	std::string                 cgi_path;
     	std::string                 upload_path;
     

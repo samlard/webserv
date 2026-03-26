@@ -1,37 +1,82 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>WebServ Test Page</title>
+    <title>WebServ POST + CGI Test</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             max-width: 800px;
-            margin: 50px auto;
+            margin: 40px auto;
             padding: 20px;
+            background: #f6f8fb;
+            color: #222;
         }
-        h1 { color: #333; }
-        .info { background: #f0f0f0; padding: 15px; border-radius: 5px; }
-        .btn {
+        .card {
+            background: #fff;
+            border: 1px solid #d9e2ec;
+            border-radius: 8px;
+            padding: 18px;
+            margin-bottom: 16px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px;
+            border: 1px solid #bcccdc;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        button, .btn {
             display: inline-block;
-            padding: 10px 20px;
-            background: #4CAF50;
-            color: white;
+            padding: 10px 14px;
+            border: none;
+            border-radius: 6px;
+            background: #0b69ff;
+            color: #fff;
             text-decoration: none;
-            border-radius: 5px;
-            margin-top: 10px;
+            cursor: pointer;
         }
-        .btn:hover {
-            background: #45a049;
+        button:hover, .btn:hover {
+            background: #0552c3;
+        }
+        code {
+            background: #eef2f7;
+            padding: 2px 4px;
+            border-radius: 4px;
         }
     </style>
 </head>
 <body>
-    <h1>Welcome to WebServ!</h1>
-    <div class="info">
-        <p>This is a C++98 HTTP server implementation for the 42 Webserv project.</p>
-        <h2>Test CGI</h2>
-        <!-- Bouton pour lancer le script CGI -->
-        <a class="btn" href="/cgi-bin/hello.py">Run Python CGI</a>
+    <h1>WebServ POST and CGI Test</h1>
+
+    <div class="card">
+        <h2>POST to CGI</h2>
+        <p>This form sends a POST request to <code>/cgi-bin/test.py</code>.</p>
+        <form action="/cgi-bin/test.py" method="POST">
+            <label for="message">Message</label>
+            <input id="message" name="message" type="text" placeholder="Type a message" required>
+            <button type="submit">Send to CGI</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Upload Endpoint</h2>
+        <p>This form sends POST data to <code>/uploads</code> (saved if upload_path is configured).</p>
+        <form action="/uploads" method="POST">
+            <label for="uploadText">Upload Content</label>
+            <input id="uploadText" name="uploadText" type="text" placeholder="Data to save in uploaded file" required>
+            <button type="submit">Send Upload POST</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>GET CGI</h2>
+        <a class="btn" href="/cgi-bin/hello.py">Run Python CGI (GET)</a>
     </div>
 </body>
 </html>
