@@ -1,82 +1,505 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>WebServ POST + CGI Test</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebServ — Test Suite</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
     <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0d0f14;
+            --surface: #141720;
+            --surface2: #1c2030;
+            --border: #252a3a;
+            --border-hover: #3a4260;
+            --text: #c8d0e8;
+            --text-muted: #5a6480;
+            --text-dim: #8892b0;
+            --accent: #5b8af5;
+            --accent-glow: rgba(91, 138, 245, 0.15);
+            --green: #4ecca3;
+            --green-glow: rgba(78, 204, 163, 0.12);
+            --red: #f4617f;
+            --red-glow: rgba(244, 97, 127, 0.12);
+            --yellow: #f0c060;
+            --mono: 'IBM Plex Mono', monospace;
+            --sans: 'IBM Plex Sans', sans-serif;
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 40px auto;
-            padding: 20px;
-            background: #f6f8fb;
-            color: #222;
+            font-family: var(--sans);
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 40px 20px 80px;
         }
+
+        /* Subtle grid background */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(91,138,245,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(91,138,245,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 820px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Header */
+        header {
+            margin-bottom: 48px;
+            animation: fadeDown 0.5s ease both;
+        }
+
+        .header-tag {
+            font-family: var(--mono);
+            font-size: 11px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .header-tag::before {
+            content: '';
+            width: 24px;
+            height: 1px;
+            background: var(--accent);
+        }
+
+        h1 {
+            font-family: var(--mono);
+            font-size: clamp(24px, 4vw, 36px);
+            font-weight: 600;
+            color: #e8ecf8;
+            letter-spacing: -0.02em;
+        }
+
+        h1 span {
+            color: var(--accent);
+        }
+
+        .header-sub {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-top: 8px;
+            font-weight: 300;
+        }
+
+        /* Method badge */
+        .method {
+            font-family: var(--mono);
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            padding: 3px 8px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .method-get  { background: var(--green-glow); color: var(--green); border: 1px solid rgba(78,204,163,0.2); }
+        .method-post { background: var(--accent-glow); color: var(--accent); border: 1px solid rgba(91,138,245,0.2); }
+        .method-del  { background: var(--red-glow); color: var(--red); border: 1px solid rgba(244,97,127,0.2); }
+
+        /* Cards */
         .card {
-            background: #fff;
-            border: 1px solid #d9e2ec;
-            border-radius: 8px;
-            padding: 18px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 28px;
             margin-bottom: 16px;
+            transition: border-color 0.2s;
+            animation: fadeUp 0.4s ease both;
         }
+
+        .card:hover { border-color: var(--border-hover); }
+        .card:nth-child(1) { animation-delay: 0.1s; }
+        .card:nth-child(2) { animation-delay: 0.15s; }
+        .card:nth-child(3) { animation-delay: 0.2s; }
+        .card:nth-child(4) { animation-delay: 0.25s; }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 6px;
+        }
+
+        .card h2 {
+            font-family: var(--mono);
+            font-size: 15px;
+            font-weight: 500;
+            color: #dde4f8;
+        }
+
+        .card-desc {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        code {
+            font-family: var(--mono);
+            font-size: 12px;
+            background: var(--surface2);
+            color: var(--yellow);
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+        }
+
+        /* Inputs */
+        .field { margin-bottom: 14px; }
+
         label {
             display: block;
-            margin-bottom: 8px;
-            font-weight: bold;
+            font-size: 12px;
+            font-family: var(--mono);
+            color: var(--text-dim);
+            margin-bottom: 6px;
+            letter-spacing: 0.05em;
         }
-        input[type="text"] {
+
+        input[type="text"],
+        textarea {
             width: 100%;
-            box-sizing: border-box;
-            padding: 10px;
-            border: 1px solid #bcccdc;
+            background: var(--surface2);
+            border: 1px solid var(--border);
             border-radius: 6px;
-            margin-bottom: 10px;
-        }
-        button, .btn {
-            display: inline-block;
+            color: var(--text);
+            font-family: var(--mono);
+            font-size: 13px;
             padding: 10px 14px;
-            border: none;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            resize: vertical;
+        }
+
+        input[type="text"]:focus,
+        textarea:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        textarea { min-height: 80px; }
+
+        /* Buttons */
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        button, .btn-link {
+            font-family: var(--mono);
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0.04em;
+            padding: 9px 18px;
             border-radius: 6px;
-            background: #0b69ff;
-            color: #fff;
-            text-decoration: none;
+            border: 1px solid transparent;
             cursor: pointer;
+            transition: all 0.15s;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            text-decoration: none;
         }
-        button:hover, .btn:hover {
-            background: #0552c3;
+
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
         }
-        code {
-            background: #eef2f7;
-            padding: 2px 4px;
-            border-radius: 4px;
+        .btn-primary:hover { background: #7aa5f7; border-color: #7aa5f7; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(91,138,245,0.35); }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-dim);
+            border-color: var(--border);
         }
+        .btn-ghost:hover { color: var(--text); border-color: var(--border-hover); background: var(--surface2); }
+
+        .btn-danger {
+            background: transparent;
+            color: var(--red);
+            border-color: rgba(244,97,127,0.3);
+        }
+        .btn-danger:hover { background: var(--red-glow); border-color: var(--red); transform: translateY(-1px); }
+
+        .btn-green {
+            background: transparent;
+            color: var(--green);
+            border-color: rgba(78,204,163,0.3);
+        }
+        .btn-green:hover { background: var(--green-glow); border-color: var(--green); transform: translateY(-1px); }
+
+        /* Response box */
+        .response-box {
+            margin-top: 16px;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            display: none;
+        }
+
+        .response-box.visible { display: block; }
+
+        .response-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 14px;
+            background: var(--surface2);
+            border-bottom: 1px solid var(--border);
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .status-pill {
+            font-family: var(--mono);
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 20px;
+        }
+
+        .status-ok  { background: var(--green-glow); color: var(--green); }
+        .status-err { background: var(--red-glow); color: var(--red); }
+
+        .response-body {
+            padding: 14px;
+            font-family: var(--mono);
+            font-size: 12px;
+            line-height: 1.7;
+            color: var(--text-dim);
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        /* Spinner */
+        .spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            display: none;
+        }
+
+        .loading .spinner { display: inline-block; }
+
+        /* Divider */
+        .divider {
+            height: 1px;
+            background: var(--border);
+            margin: 20px 0;
+        }
+
+        /* Animations */
+        @keyframes fadeDown {
+            from { opacity: 0; transform: translateY(-16px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--surface); }
+        ::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 3px; }
     </style>
 </head>
 <body>
-    <h1>WebServ POST and CGI Test</h1>
+<div class="container">
 
+    <header>
+        <div class="header-tag">HTTP Test Suite</div>
+        <h1>Web<span>Serv</span></h1>
+        <p class="header-sub">Test GET · POST · DELETE requests and CGI scripts against your server.</p>
+    </header>
+
+    <!-- GET -->
     <div class="card">
-        <h2>POST to CGI</h2>
-        <p>This form sends a POST request to <code>/cgi-bin/test.py</code>.</p>
-        <form action="/cgi-bin/test.py" method="POST">
-            <label for="message">Message</label>
-            <input id="message" name="message" type="text" placeholder="Type a message" required>
-            <button type="submit">Send to CGI</button>
-        </form>
+        <div class="card-header">
+            <span class="method method-get">GET</span>
+            <h2>Read a Resource</h2>
+        </div>
+        <p class="card-desc">Fetch an existing file from the server. Try a valid path or trigger a <code>404</code>.</p>
+        <div class="field">
+            <label>Path</label>
+            <input type="text" id="get-path" value="/index.html" placeholder="/path/to/resource" />
+        </div>
+        <div class="btn-row">
+            <button class="btn-primary" onclick="doGet()">
+                <span>↓</span> Send GET
+            </button>
+            <button class="btn-ghost" onclick="setGet('/index.html')">/index.html</button>
+            <button class="btn-ghost" onclick="setGet('/cgi-bin/test.py')">/cgi-bin/test.py</button>
+            <button class="btn-ghost" onclick="setGet('/noexist.html')">404 test</button>
+        </div>
+        <div class="response-box" id="resp-get">
+            <div class="response-header">
+                <span class="spinner"></span>
+                <span class="status-pill" id="status-get"></span>
+                <span id="label-get"></span>
+            </div>
+            <div class="response-body" id="body-get"></div>
+        </div>
     </div>
 
+    <!-- POST Upload -->
     <div class="card">
-        <h2>Upload Endpoint</h2>
-        <p>This form sends POST data to <code>/uploads</code> (saved if upload_path is configured).</p>
-        <form action="/uploads" method="POST">
-            <label for="uploadText">Upload Content</label>
-            <input id="uploadText" name="uploadText" type="text" placeholder="Data to save in uploaded file" required>
-            <button type="submit">Send Upload POST</button>
-        </form>
+        <div class="card-header">
+            <span class="method method-post">POST</span>
+            <h2>Upload File</h2>
+        </div>
+        <p class="card-desc">Send a text payload to <code>/uploads/</code>. The server saves it if <code>upload_path</code> is configured.</p>
+        <div class="field">
+            <label>Body</label>
+            <textarea id="post-body" placeholder="Content to upload…">Hello from WebServ test page!</textarea>
+        </div>
+        <div class="btn-row">
+            <button class="btn-primary" onclick="doPost()">
+                <span>↑</span> Send POST
+            </button>
+        </div>
+        <div class="response-box" id="resp-post">
+            <div class="response-header">
+                <span class="spinner"></span>
+                <span class="status-pill" id="status-post"></span>
+                <span id="label-post"></span>
+            </div>
+            <div class="response-body" id="body-post"></div>
+        </div>
     </div>
 
+    <!-- DELETE -->
     <div class="card">
-        <h2>GET CGI</h2>
-        <a class="btn" href="/cgi-bin/hello.py">Run Python CGI (GET)</a>
+        <div class="card-header">
+            <span class="method method-del">DELETE</span>
+            <h2>Delete a File</h2>
+        </div>
+        <p class="card-desc">Remove an uploaded file by path. Upload something first, then paste the returned path here.</p>
+        <div class="field">
+            <label>File Path</label>
+            <input type="text" id="delete-path" placeholder="/uploads/upload_xxx_1" />
+        </div>
+        <div class="btn-row">
+            <button class="btn-danger" onclick="doDelete()">
+                <span>✕</span> Send DELETE
+            </button>
+        </div>
+        <div class="response-box" id="resp-delete">
+            <div class="response-header">
+                <span class="spinner"></span>
+                <span class="status-pill" id="status-delete"></span>
+                <span id="label-delete"></span>
+            </div>
+            <div class="response-body" id="body-delete"></div>
+        </div>
     </div>
+
+    <!-- CGI -->
+    <div class="card">
+        <div class="card-header">
+            <span class="method method-get">GET</span>
+            <h2>CGI Script</h2>
+        </div>
+        <p class="card-desc">Run the Python CGI handler at <code>/cgi-bin/hello.py</code> via a direct GET request.</p>
+        <div class="btn-row">
+            <a class="btn-link btn-green" href="/cgi-bin/hello.py" target="_blank">
+                <span>⚙</span> Run hello.py
+            </a>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    function setGet(path) {
+        document.getElementById('get-path').value = path;
+    }
+
+    function showResult(id, status, text, loading = false) {
+        const box    = document.getElementById('resp-' + id);
+        const pill   = document.getElementById('status-' + id);
+        const lbl    = document.getElementById('label-' + id);
+        const body   = document.getElementById('body-' + id);
+        const header = box.querySelector('.response-header');
+
+        box.classList.add('visible');
+
+        if (loading) {
+            header.classList.add('loading');
+            pill.textContent = '';
+            pill.className = 'status-pill';
+            lbl.textContent = 'Waiting for response…';
+            body.textContent = '';
+            return;
+        }
+
+        header.classList.remove('loading');
+        const ok = status >= 200 && status < 300;
+        pill.textContent = 'HTTP ' + status;
+        pill.className = 'status-pill ' + (ok ? 'status-ok' : 'status-err');
+        lbl.textContent = ok ? 'Success' : 'Error';
+        body.textContent = text;
+    }
+
+    function doGet() {
+        const path = document.getElementById('get-path').value.trim() || '/';
+        showResult('get', 0, '', true);
+        fetch(path)
+            .then(r => r.text().then(t => showResult('get', r.status, t)))
+            .catch(e => showResult('get', 0, 'Network error: ' + e));
+    }
+
+    function doPost() {
+        const body = document.getElementById('post-body').value;
+        showResult('post', 0, '', true);
+        fetch('/uploads/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: body
+        })
+        .then(r => r.text().then(t => showResult('post', r.status, t)))
+        .catch(e => showResult('post', 0, 'Network error: ' + e));
+    }
+
+    function doDelete() {
+        const path = document.getElementById('delete-path').value.trim();
+        if (!path) { alert('Enter a file path first.'); return; }
+        showResult('delete', 0, '', true);
+        fetch(path, { method: 'DELETE' })
+            .then(r => r.text().then(t => showResult('delete', r.status, t)))
+            .catch(e => showResult('delete', 0, 'Network error: ' + e));
+    }
+</script>
 </body>
 </html>
