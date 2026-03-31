@@ -144,14 +144,3 @@ curl -v -X DELETE http://localhost:8080/upload/file.txt
 ### CGI
 
 - [RFC 3875 — The Common Gateway Interface (CGI/1.1)](https://www.rfc-editor.org/rfc/rfc3875) — specification for CGI script execution
-
-### AI Usage
-
-AI tools (primarily Claude and ChatGPT) were used during the development of this project for the following purposes:
-
-- **Understanding the HTTP spec** — asking targeted questions about edge cases in request/response formatting, header handling, chunked transfer encoding, and status code semantics to complement reading the RFCs directly.
-- **Debugging** — analyzing error outputs, tracing unexpected behavior in the request parsing logic, and identifying issues in the socket and poll() event loop.
-- **Code review** — getting feedback on C++ class design, spotting potential memory leaks or undefined behavior, and improving code clarity.
-- **Writing documentation** — drafting and refining this README and inline code comments.
-
-AI was used as a learning and productivity tool. All design decisions, architecture choices, and final implementations were made and reviewed by the team.
