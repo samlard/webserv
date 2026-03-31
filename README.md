@@ -1,245 +1,157 @@
-# WebServ - C++98 HTTP Server
+*This project has been created as part of the 42 curriculum by [ssoumil](https://github.com/samlard), [mvan-vel](https://github.com/maximevanvelthoven), and [nicleena](https://github.com/SoLeQz).*
 
-A fully functional HTTP/1.1 server implementation in C++98 for the 42 School project.
+# webserv
 
-## Features
+## Description
 
-- ✅ **C++98 compliant** - Compiles with `-std=c++98 -Wall -Wextra -Werror`
-- ✅ **Non-blocking I/O** - Single `poll()` loop for all socket operations
-- ✅ **Multiple ports** - Support for multiple listening ports
-- ✅ **HTTP methods** - GET, POST, DELETE support
-- ✅ **Static files** - Efficient static file serving with proper MIME types
-- ✅ **Directory listing** - Auto-index feature
-- ✅ **File uploads** - POST file upload support
-- ✅ **CGI support** - Execute CGI scripts (fork + execve)
-- ✅ **Configuration** - nginx-inspired configuration file
-- ✅ **Keep-alive** - HTTP persistent connections
-- ✅ **Error handling** - Proper HTTP status codes
-- ✅ **No memory leaks** - Clean resource management
-- ✅ **No crashes** - Robust error handling
+**webserv** is a fully functional HTTP/1.1 web server written in C++98, built from scratch as part of the 42 school curriculum. The goal of the project is to gain a deep understanding of how web servers work under the hood — from socket management and I/O multiplexing, to HTTP request parsing and response generation.
 
-## Architecture
+Inspired by the behavior of NGINX, this server is driven by a configuration file and is capable of handling multiple simultaneous clients without ever blocking. It supports static file serving, file uploads, directory listing, custom error pages, and CGI execution for dynamic content generation.
 
-### Core Classes
+### Key Features
 
-1. **Server** - Main orchestrator running the poll() loop
-2. **Client** - Manages individual client connection state
-3. **Request** - HTTP request parser (incremental, non-blocking)
-4. **Response** - HTTP response builder
-5. **Config** - Configuration file parser
-6. **CGI** - CGI script execution handler
-7. **Utils** - Helper functions for file/string operations
+- **HTTP/1.1 compliant** — supports `GET`, `POST`, and `DELETE` methods
+- **Non-blocking I/O** — uses `poll()` (or equivalent) to handle multiple connections concurrently
+- **Configuration file** — NGINX-inspired syntax for defining servers, ports, routes, and behaviors
+- **Multiple virtual hosts** — serve different content based on host/port combinations
+- **Static file serving** — serve HTML, CSS, images, and other assets from a root directory
+- **Directory listing** — auto-generated index pages for directories when no index file is found
+- **File uploads** — clients can upload files to the server via `POST`
+- **CGI support** — execute scripts (e.g., Python, PHP) and return their output dynamically
+- **Custom error pages** — configurable pages for 4xx and 5xx HTTP errors
+- **Redirections** — HTTP redirects configurable per route
 
-### Data Flow
+---
 
-```
-Socket → Server (poll) → Client (read) → Request (parse) 
-  → Process → Response (build) → Client (write) → Socket
-```
+## Instructions
 
-### Non-Blocking State Machine
+### Requirements
 
-```
-Client States:
-READING_REQUEST → PROCESSING → WRITING_RESPONSE → DONE
-       ↓                                            ↓
-     ERROR                                    Keep-Alive?
-                                                    ↓
-                                              Reset & Reuse
-```
+- A Unix-like operating system (Linux or macOS)
+- `g++` or `clang++` with C++98 support
+- `make`
+- Python 3 (optional, for CGI script testing)
+- PHP-CGI (optional, for PHP CGI testing)
 
-## Building
+### Compilation
+
+Clone the repository and compile using the provided Makefile:
 
 ```bash
+git clone https://github.com/<your-org>/webserv.git
+cd webserv
 make
 ```
 
-This creates the `webserv` executable.
+This produces a `webserv` executable in the root directory.
 
-## Running
-
+To remove compiled objects:
 ```bash
-./webserv config/test.conf
+make clean
 ```
 
-The server will start and listen on the configured ports.
+To remove all build artifacts including the binary:
+```bash
+make fclean
+```
 
-## Configuration
+To recompile from scratch:
+```bash
+make re
+```
 
-Configuration syntax is inspired by nginx:
+### Running the Server
+
+```bash
+./webserv [configuration_file]
+```
+
+If no configuration file is provided, the server will fall back to a default configuration.
+
+**Example:**
+```bash
+./webserv config/default.conf
+```
+
+### Configuration File
+
+The configuration file follows an NGINX-inspired syntax. Below is a minimal example:
 
 ```nginx
 server {
-    listen 8080;
-    server_name localhost;
-    root ./www;
-    index index.html;
-    client_max_body_size 10485760;
-    
-    error_page 404 /404.html;
-    
+    listen       8080;
+    server_name  localhost;
+
+    root         ./www;
+    index        index.html;
+
+    client_max_body_size 10M;
+
+    error_page   404 /errors/404.html;
+    error_page   500 /errors/500.html;
+
     location / {
-        allow_methods GET POST DELETE;
-        autoindex on;
+        allow_methods GET POST;
+        autoindex     off;
     }
-    
-    location /uploads {
-        upload_path ./uploads;
-        allow_methods GET POST DELETE;
+
+    location /upload {
+        allow_methods POST;
+        upload_dir    ./www/uploads;
     }
-    
+
     location /cgi-bin {
+        allow_methods GET POST;
         cgi_extension .py;
-        cgi_path /usr/bin/python;
+        cgi_path      /usr/bin/python3;
     }
 }
 ```
 
-### Configuration Directives
+### Testing
 
-#### Server Block
-- `listen` - Port number to listen on
-- `server_name` - Server name (for Host header matching)
-- `root` - Root directory for files
-- `index` - Default index file
-- `client_max_body_size` - Maximum request body size in bytes
-- `error_page` - Custom error page for status code
+You can test the server using a web browser, `curl`, or tools like `siege` for load testing:
 
-#### Location Block
-- `allow_methods` - Allowed HTTP methods (GET, POST, DELETE)
-- `autoindex` - Enable directory listing (on/off)
-- `root` - Override root directory for this location
-- `index` - Override index file for this location
-- `return` - Redirect to another location
-- `upload_path` - Directory for file uploads
-- `cgi_extension` - File extension for CGI scripts
-- `cgi_path` - Path to CGI interpreter
-
-## Testing
-
-### Test GET request
 ```bash
-curl http://localhost:8080/
+# Basic GET request
+curl -v http://localhost:8080/
+
+# POST file upload
+curl -v -X POST --data-binary @file.txt http://localhost:8080/upload
+
+# DELETE request
+curl -v -X DELETE http://localhost:8080/upload/file.txt
 ```
 
-### Test POST file upload
-```bash
-curl -X POST --data-binary "@file.txt" http://localhost:8080/uploads
-```
+---
 
-### Test DELETE
-```bash
-curl -X DELETE http://localhost:8080/test.txt
-```
+## Resources
 
-### Test directory listing
-```bash
-curl http://localhost:8080/
-```
+### HTTP & Networking
 
-## Project Structure
+- [RFC 9110 — HTTP Semantics](https://www.rfc-editor.org/rfc/rfc9110) — the authoritative reference for HTTP/1.1 semantics
+- [RFC 9112 — HTTP/1.1](https://www.rfc-editor.org/rfc/rfc9112) — covers the wire format and message framing
+- [Beej's Guide to Network Programming](https://beej.us/guide/bgnet/) — an excellent practical guide to BSD sockets in C
+- [MDN Web Docs — HTTP](https://developer.mozilla.org/en-US/docs/Web/HTTP) — approachable HTTP reference for headers, methods, and status codes
+- [NGINX Documentation](https://nginx.org/en/docs/) — used as behavioral reference for configuration syntax and server logic
 
-```
-webserv/
-├── includes/          # Header files
-│   ├── Server.hpp
-│   ├── Client.hpp
-│   ├── Request.hpp
-│   ├── Response.hpp
-│   ├── Config.hpp
-│   ├── CGI.hpp
-│   └── Utils.hpp
-├── srcs/             # Source files
-│   ├── main.cpp
-│   ├── Server.cpp
-│   ├── Client.cpp
-│   ├── Request.cpp
-│   ├── Response.cpp
-│   ├── Config.cpp
-│   ├── CGI.cpp
-│   └── Utils.cpp
-├── config/           # Configuration files
-│   ├── default.conf
-│   └── test.conf
-├── www/              # Default web root
-│   └── index.html
-├── Makefile
-└── README.md
-```
+### I/O Multiplexing
 
-## Design Principles
+- [`poll(2)` man page](https://man7.org/linux/man-pages/man2/poll.2.html)
+- [`select(2)` man page](https://man7.org/linux/man-pages/man2/select.2.html)
+- [`epoll(7)` man page](https://man7.org/linux/man-pages/man7/epoll.7.html) — Linux-specific, higher-performance alternative
 
-### Single Responsibility
-Each class has one clear purpose:
-- Server: I/O multiplexing and orchestration
-- Client: Connection state management
-- Request: HTTP parsing
-- Response: HTTP formatting
-- Config: Configuration management
-- CGI: Script execution
-- Utils: Helper utilities
+### CGI
 
-### Non-Blocking Architecture
-- All socket operations are non-blocking
-- Single poll() manages all file descriptors
-- Incremental request parsing
-- Partial write handling
-- Timeout management
+- [RFC 3875 — The Common Gateway Interface (CGI/1.1)](https://www.rfc-editor.org/rfc/rfc3875) — specification for CGI script execution
 
-### No errno Dependencies
-The design avoids relying on errno after read/write operations. Return values indicate success/failure directly.
+### AI Usage
 
-### Memory Safety
-- No raw pointers without ownership
-- Proper cleanup in destructors
-- RAII principles where applicable in C++98
-- No memory leaks (valgrind clean)
+AI tools (primarily Claude and ChatGPT) were used during the development of this project for the following purposes:
 
-### Robustness
-- Graceful error handling
-- Proper HTTP status codes
-- Request validation
-- Timeout handling
-- Signal handling (SIGINT, SIGTERM)
+- **Understanding the HTTP spec** — asking targeted questions about edge cases in request/response formatting, header handling, chunked transfer encoding, and status code semantics to complement reading the RFCs directly.
+- **Debugging** — analyzing error outputs, tracing unexpected behavior in the request parsing logic, and identifying issues in the socket and poll() event loop.
+- **Code review** — getting feedback on C++ class design, spotting potential memory leaks or undefined behavior, and improving code clarity.
+- **Writing documentation** — drafting and refining this README and inline code comments.
 
-## CGI Support
-
-CGI scripts are executed using fork() and execve():
-- Environment variables set per CGI/1.1 spec
-- Request body piped to CGI stdin
-- CGI stdout captured and parsed
-- Timeout protection
-- Proper cleanup
-
-Example Python CGI script:
-```python
-#!/usr/bin/env python
-print("Content-Type: text/html")
-print()
-print("<h1>Hello from CGI!</h1>")
-```
-
-## Limitations (by design)
-
-- C++98 only (no C++11/14/17 features)
-- No external libraries
-- fork() only for CGI (not for handling requests)
-- Single-threaded (poll-based event loop)
-- No chunked transfer encoding (yet)
-- No HTTPS support
-
-## Development
-
-Compile with debug info:
-```bash
-make CXXFLAGS="-std=c++98 -Wall -Wextra -Werror -g -Iincludes"
-```
-
-Check for memory leaks:
-```bash
-valgrind --leak-check=full ./webserv config/test.conf
-```
-
-## License
-
-This is an educational project for 42 School.
+AI was used as a learning and productivity tool. All design decisions, architecture choices, and final implementations were made and reviewed by the team.
