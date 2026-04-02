@@ -170,6 +170,7 @@ void Server::run()
                 Client &client = _clients[fd];
                 std::string responseStr = client.getResponse().toString();
 
+                errno = 0;  // Reset errno before the system call
                 ssize_t sent = send(fd, responseStr.c_str(), responseStr.size(), 0);
                 if (sent < 0)
                 {
