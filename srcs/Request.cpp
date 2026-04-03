@@ -59,7 +59,11 @@ void Server::parseRequest(Client& client)
             continue;
 
         std::string key = line.substr(0, pos);
-        std::string value = line.substr(pos + 2);
+        std::string value = line.substr(pos + 1);
+
+        // Trim leading whitespace (space after colon is optional per RFC 7230)
+        while (!value.empty() && (value[0] == ' ' || value[0] == '\t'))
+            value.erase(0, 1);
 
         if (!value.empty() && value[value.size()-1] == '\r')
             value.erase(value.size()-1);

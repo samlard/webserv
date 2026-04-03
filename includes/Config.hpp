@@ -47,7 +47,8 @@ class ServerConfig {
 class Config {
 	private :
    	 	std::vector<ServerConfig> _servers;
-		std::string _errorMsg;       
+		std::string _errorMsg;   
+		bool _listen;    
 
 
 	public :

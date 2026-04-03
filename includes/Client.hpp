@@ -18,6 +18,9 @@ private:
     Request _request;
     Response _response;
 
+    std::string _responseStr;
+    size_t _sendOffset;
+
 public:
 
     Client();
@@ -25,6 +28,7 @@ public:
 
     int getFd() const;
     int getServerIndex() const;
+    void setServerIndex(int idx);
 
     std::string& getBuffer();
     void appendToBuffer(const std::string& data);
@@ -33,6 +37,12 @@ public:
 
     void markRequestComplete();
     bool isRequestComplete() const;
+
+    void prepareResponse();
+    const std::string& getResponseStr() const;
+    size_t getSendOffset() const;
+    void advanceSendOffset(size_t n);
+    bool isSendComplete() const;
 
     void clear();
 };

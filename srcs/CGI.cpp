@@ -1,6 +1,8 @@
 #include "../includes/Server.hpp"
-#include "../includes/Utils.hpp" 
-#include <sys/stat.h> 
+#include "../includes/Utils.hpp"
+#include <sys/stat.h>
+#include <poll.h>
+#include <ctime>
 
 
 
@@ -33,6 +35,7 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
     int outPipe[2];
     int inPipe[2];
     struct stat st;
+    const int CGI_TIMEOUT_MS = 10000;
 
     if (stat(scriptPath.c_str(), &st) != 0 || !S_ISREG(st.st_mode))
     {
@@ -102,6 +105,18 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
 
     if (pid == 0)
     {
+        // chdir to script directory for relative path file access
+        std::string scriptName = scriptPath;
+        std::string dir = scriptPath;
+        size_t lastSlash = dir.rfind('/');
+        if (lastSlash != std::string::npos)
+        {
+            dir = dir.substr(0, lastSlash);
+            scriptName = scriptPath.substr(lastSlash + 1);
+            if (!dir.empty())
+                chdir(dir.c_str());
+        }
+
         dup2(outPipe[1], STDOUT_FILENO);
         dup2(outPipe[1], STDERR_FILENO);
         dup2(inPipe[0], STDIN_FILENO);
@@ -122,58 +137,135 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
         if (contentTypeIt != req.headers.end() && !contentTypeIt->second.empty())
             contentTypeValue = contentTypeIt->second;
         std::string contentType = "CONTENT_TYPE=" + contentTypeValue;
+        std::string scriptFilename = "SCRIPT_FILENAME=" + scriptPath;
 
-        char* envp[6];
+        // Get PATH from parent environment so shebangs with /usr/bin/env work
+        std::string pathEnv = "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+        const char* parentPath = getenv("PATH");
+        if (parentPath)
+            pathEnv = std::string("PATH=") + parentPath;
+
+        char* envp[8];
         envp[0] = const_cast<char*>(requestMethod.c_str());
         envp[1] = const_cast<char*>(queryString.c_str());
         envp[2] = const_cast<char*>(serverProtocol.c_str());
         envp[3] = const_cast<char*>(contentLength.c_str());
         envp[4] = const_cast<char*>(contentType.c_str());
-        envp[5] = NULL;
+        envp[5] = const_cast<char*>(scriptFilename.c_str());
+        envp[6] = const_cast<char*>(pathEnv.c_str());
+        envp[7] = NULL;
+
+        // Use script filename (not full path) since we chdir'd to script dir
+        std::string dotSlashScript = "./" + scriptName;
 
         if (!loc->cgi_path.empty())
         {
             char* argv[3];
             argv[0] = const_cast<char*>(loc->cgi_path.c_str());
-            argv[1] = const_cast<char*>(scriptPath.c_str());
+            argv[1] = const_cast<char*>(dotSlashScript.c_str());
             argv[2] = NULL;
             execve(argv[0], argv, envp);
         }
         else
         {
             char* argv[2];
-            argv[0] = const_cast<char*>(scriptPath.c_str());
+            argv[0] = const_cast<char*>(dotSlashScript.c_str());
             argv[1] = NULL;
             execve(argv[0], argv, envp);
         }
 
         perror("execve failed");
-        exit(1);
+        _exit(1);
     }
 
+    // Parent process
     close(outPipe[1]);
     close(inPipe[0]);
 
+    // Set pipes non-blocking for poll-based I/O
+    fcntl(inPipe[1], F_SETFL, O_NONBLOCK);
+    fcntl(outPipe[0], F_SETFL, O_NONBLOCK);
+
+    time_t startTime = time(NULL);
+
+    // Write request body to CGI stdin using poll()
     if (!req.body.empty())
     {
         size_t written = 0;
         while (written < req.body.size())
         {
+            if (time(NULL) - startTime > CGI_TIMEOUT_MS / 1000)
+            {
+                kill(pid, SIGKILL);
+                waitpid(pid, NULL, 0);
+                close(inPipe[1]);
+                close(outPipe[0]);
+                res.statusCode = 504;
+                res.body = "CGI timeout";
+                return res;
+            }
+
+            struct pollfd pfd;
+            pfd.fd = inPipe[1];
+            pfd.events = POLLOUT;
+            pfd.revents = 0;
+
+            int pret = poll(&pfd, 1, 1000);
+            if (pret <= 0)
+                break;
+            if (!(pfd.revents & POLLOUT))
+                break;
+
             ssize_t n = write(inPipe[1], req.body.c_str() + written, req.body.size() - written);
             if (n <= 0)
                 break;
             written += static_cast<size_t>(n);
         }
     }
-
     close(inPipe[1]);
 
+    // Read CGI output using poll()
     char buffer[4096];
-    int bytes;
     std::string output;
 
-    while ((bytes = read(outPipe[0], buffer, sizeof(buffer))) > 0)
-        output.append(buffer, bytes);
+    while (true)
+    {
+        if (time(NULL) - startTime > CGI_TIMEOUT_MS / 1000)
+        {
+            kill(pid, SIGKILL);
+            waitpid(pid, NULL, 0);
+            close(outPipe[0]);
+            res.statusCode = 504;
+            res.body = "CGI timeout";
+            return res;
+        }
+
+        struct pollfd pfd;
+        pfd.fd = outPipe[0];
+        pfd.events = POLLIN;
+        pfd.revents = 0;
+
+        int pret = poll(&pfd, 1, 1000);
+        if (pret < 0)
+            break;
+        if (pret == 0)
+            continue;
+        if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL))
+        {
+            // Try one last read before breaking
+            ssize_t bytes = read(outPipe[0], buffer, sizeof(buffer));
+            if (bytes > 0)
+                output.append(buffer, bytes);
+            break;
+        }
+        if (pfd.revents & POLLIN)
+        {
+            ssize_t bytes = read(outPipe[0], buffer, sizeof(buffer));
+            if (bytes <= 0)
+                break;
+            output.append(buffer, bytes);
+        }
+    }
 
     close(outPipe[0]);
 
@@ -329,11 +421,10 @@ Response Server::handleGet(const Request& req, const ServerConfig& config, Locat
     res.statusCode = 200;
     res.body = buffer.str();
 
-    // C++98 workaround pour std::to_string
     std::stringstream ss;
     ss << res.body.size();
     res.headers["Content-Length"] = ss.str();
-    res.headers["Content-Type"] = "text/html; charset=UTF-8";
+    res.headers["Content-Type"] = getMimeType(path);
 
     return res;
 }

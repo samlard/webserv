@@ -12,7 +12,12 @@ Server::~Server() {
 }
 
 void Server::shutdown(){
-    exit(0);
+    _running = false;
+    for (size_t i = 0; i < _fds.size(); i++)
+        close(_fds[i].fd);
+    _fds.clear();
+    _clients.clear();
+    _listenSockets.clear();
 }
 
 
@@ -130,8 +135,8 @@ void Server::run()
 
         if (ret < 0)
         {
-            if (errno == EINTR)
-                continue;
+            if (!_running)
+                break;
             perror("poll");
             break;
         }
@@ -154,42 +159,7 @@ void Server::run()
                 }
             }
 
-            if (isListenSocket && (revents & POLLIN))
-            {
-                acceptNewClient(fd);
-                continue;
-            }
-
-            if (!isListenSocket && (revents & POLLIN))
-            {
-                handleClientRead(i);
-            }
-
-            if (!isListenSocket && (_fds[i].revents & POLLOUT))
-            {
-                Client &client = _clients[fd];
-                std::string responseStr = client.getResponse().toString();
-
-                errno = 0;  // Reset errno before the system call
-                ssize_t sent = send(fd, responseStr.c_str(), responseStr.size(), 0);
-                if (sent < 0)
-                {
-                    if (errno != EAGAIN && errno != EWOULDBLOCK)
-                    {
-                        close(fd);
-                        _clients.erase(fd);
-                        _fds.erase(_fds.begin() + i);
-                    }
-                    continue;
-                }
-
-                // This server currently sends one response per request then closes.
-                close(fd);
-                _clients.erase(fd);
-                _fds.erase(_fds.begin() + i);
-                continue;
-            }
-
+            // Handle errors first
             if (revents & (POLLERR | POLLHUP | POLLNVAL))
             {
                 if (!isListenSocket)
@@ -198,6 +168,27 @@ void Server::run()
                     _clients.erase(fd);
                     _fds.erase(_fds.begin() + i);
                 }
+                continue;
+            }
+
+            // Accept new connections
+            if (isListenSocket && (revents & POLLIN))
+            {
+                acceptNewClient(fd);
+                continue;
+            }
+
+            // One read OR one write per client per poll() - never both
+            if (!isListenSocket && (revents & POLLIN))
+            {
+                handleClientRead(i);
+                continue;
+            }
+
+            if (!isListenSocket && (revents & POLLOUT))
+            {
+                handleClientWrite(i);
+                continue;
             }
         }
     }
@@ -210,9 +201,16 @@ void Server::handleClientRead(size_t i)
     int fd = _fds[i].fd;
     char buffer[BUFFER_SIZE];
 
-    int bytes = recv(fd, buffer, sizeof(buffer), 0);
+    ssize_t bytes = recv(fd, buffer, sizeof(buffer), 0);
+
+    // recv returned 0 (client disconnected) or -1 (error): remove client
     if (bytes <= 0)
+    {
+        close(fd);
+        _clients.erase(fd);
+        _fds.erase(_fds.begin() + i);
         return;
+    }
 
     Client& client = _clients[fd];
     client.appendToBuffer(std::string(buffer, bytes));
@@ -224,16 +222,56 @@ void Server::handleClientRead(size_t i)
 
         Response res = buildResponse(client);
         client.getResponse() = res;
+        client.prepareResponse();
 
+        // Switch from POLLIN to POLLOUT only
         for (size_t j = 0; j < _fds.size(); ++j)
         {
             if (_fds[j].fd == fd)
             {
-                _fds[j].events |= POLLOUT;
+                _fds[j].events = POLLOUT;
                 break;
             }
         }
     }
+}
+
+void Server::handleClientWrite(size_t i)
+{
+    int fd = _fds[i].fd;
+
+    if (_clients.find(fd) == _clients.end())
+    {
+        close(fd);
+        _fds.erase(_fds.begin() + i);
+        return;
+    }
+
+    Client& client = _clients[fd];
+    const std::string& responseStr = client.getResponseStr();
+    size_t remaining = responseStr.size() - client.getSendOffset();
+
+    ssize_t sent = send(fd, responseStr.c_str() + client.getSendOffset(), remaining, 0);
+
+    // send returned -1 (error) or 0: remove client
+    if (sent <= 0)
+    {
+        close(fd);
+        _clients.erase(fd);
+        _fds.erase(_fds.begin() + i);
+        return;
+    }
+
+    client.advanceSendOffset(static_cast<size_t>(sent));
+
+    // If all data sent, close connection
+    if (client.isSendComplete())
+    {
+        close(fd);
+        _clients.erase(fd);
+        _fds.erase(_fds.begin() + i);
+    }
+    // Otherwise POLLOUT stays active, will send more next iteration
 }
 
 void Server::acceptNewClient(int listenSocket) {
@@ -250,7 +288,12 @@ void Server::acceptNewClient(int listenSocket) {
     }
     
     // Rend non-bloquant
-    fcntl(clientFd, F_SETFL, O_NONBLOCK);
+    if (fcntl(clientFd, F_SETFL, O_NONBLOCK) < 0)
+    {
+        perror("fcntl");
+        close(clientFd);
+        return;
+    }
     
     // Trouve l'index du serveur correspondant
     int serverIndex = findServerIndex(listenSocket);

@@ -33,6 +33,7 @@ public:
     int init(Config &config);
     void run();
     void handleClientRead(size_t i);
+    void handleClientWrite(size_t i);
     void acceptNewClient(int listenSocket);
     int findServerIndex(int listenSocket) const;
     void parseRequest(Client& client);
@@ -44,6 +45,7 @@ public:
     bool isCgiRequest(const std::string& path, Location* loc);
     Response executeCgi(const Request& req, const std::string& scriptPath, Location* loc);
     bool isRequestComplete(const std::string& buffer);
+    Response applyErrorPage(Response& res, const ServerConfig& config);
 
 
 };

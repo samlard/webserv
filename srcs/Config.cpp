@@ -19,7 +19,7 @@ bool Config::is_valid_server_directive(const std::string& key) {
 bool Config::is_valid_location_directive(const std::string& key) {
     return key == "root" || key == "index" || key == "allow_methods" ||
            key == "methods" || key == "autoindex" || key == "upload_path" ||
-           key == "cgi_extension" || key == "cgi_path";
+           key == "cgi_extension" || key == "cgi_path" || key == "return";
 }
 
 std::string trim(const std::string& str) {
@@ -177,6 +177,13 @@ int Config::fill_location(std::istringstream &iss, Location &loc, std::string &e
             }
             loc.upload_path = value;
         }
+        else if (key == "return") {
+            if (value.empty()) {
+                error = "return requires a URL or status code + URL in location " + loc.path;
+                return 1;
+            }
+            loc.redirect = value;
+        }
     }
     
     return 0;
@@ -188,6 +195,7 @@ int Config::fill_server(std::string &ServerBlock, std::string &error)
     serv.port = 0;
     serv.host = "0.0.0.0";
     serv.client_max_body_size = 1000000;
+    _listen = false;
 
     std::istringstream iss(ServerBlock);
     std::string line;
@@ -256,6 +264,12 @@ int Config::fill_server(std::string &ServerBlock, std::string &error)
         }
 
         if (key == "listen") {
+            if (_listen == true)
+            {
+                error = "cant have multiple listen in same serv";
+                return 1;
+            }
+            _listen = true;
             if (value.empty()) {
                 error = "listen requires a port number";
                 return 1;
@@ -292,8 +306,17 @@ int Config::fill_server(std::string &ServerBlock, std::string &error)
                 }
             }
             serv.client_max_body_size = static_cast<size_t>(atoi(value.c_str()));
+        } else if (key == "error_page") {
+            std::istringstream epIss(value);
+            int code;
+            std::string page;
+            if (epIss >> code >> page) {
+                serv.error_pages[code] = page;
+            } else {
+                error = "error_page requires a status code and a path";
+                return 1;
+            }
         }
-        // autres directives optionnelles : error_page, client_max_body_size
     }
 
     // Validation finale
@@ -356,6 +379,19 @@ int Config::parseFile(const std::string& filename) {
         _errorMsg = "No valid server found";
         return 1;
     }
+
+    // Check for duplicate port configurations
+    for (size_t i = 0; i < _servers.size(); i++) {
+        for (size_t j = i + 1; j < _servers.size(); j++) {
+            if (_servers[i].port == _servers[j].port && _servers[i].host == _servers[j].host) {
+                std::stringstream ss;
+                ss << "Duplicate server on " << _servers[i].host << ":" << _servers[i].port;
+                _errorMsg = ss.str();
+                return 1;
+            }
+        }
+    }
+
     return 0;
 }
 

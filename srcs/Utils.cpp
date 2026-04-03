@@ -70,6 +70,32 @@ std::string buildPathFromLocation(const std::string& uriPath, const std::string&
     return joinPath(root, uriPath);
 }
 
+std::string getMimeType(const std::string& path)
+{
+    size_t dot = path.rfind('.');
+    if (dot == std::string::npos)
+        return "application/octet-stream";
+    std::string ext = path.substr(dot);
+    if (ext == ".html" || ext == ".htm") return "text/html; charset=UTF-8";
+    if (ext == ".css") return "text/css";
+    if (ext == ".js") return "application/javascript";
+    if (ext == ".json") return "application/json";
+    if (ext == ".png") return "image/png";
+    if (ext == ".jpg" || ext == ".jpeg") return "image/jpeg";
+    if (ext == ".gif") return "image/gif";
+    if (ext == ".svg") return "image/svg+xml";
+    if (ext == ".ico") return "image/x-icon";
+    if (ext == ".txt") return "text/plain";
+    if (ext == ".xml") return "application/xml";
+    if (ext == ".pdf") return "application/pdf";
+    if (ext == ".woff") return "font/woff";
+    if (ext == ".woff2") return "font/woff2";
+    if (ext == ".ttf") return "font/ttf";
+    if (ext == ".mp4") return "video/mp4";
+    if (ext == ".webp") return "image/webp";
+    return "application/octet-stream";
+}
+
 std::string generateAutoindexBody(const std::string& uri, const std::string& fsPath)
 {
     DIR* dir = opendir(fsPath.c_str());

@@ -10,6 +10,7 @@ public:
     std::map<std::string, std::string> headers;
     std::string body;
 
+    Response() : statusCode(200) {}
     std::string toString() const;
 };
 
