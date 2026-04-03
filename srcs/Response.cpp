@@ -74,6 +74,12 @@ Response Server::buildResponse(Client& client)
     if (req.method == "GET")
         res = handleGet(req, config, loc);
 
+    else if (req.method == "HEAD")
+    {
+        res = handleGet(req, config, loc);
+        res.body.clear();
+    }
+
     else if (req.method == "POST")
         res = handlePost(req, config, loc);
 
