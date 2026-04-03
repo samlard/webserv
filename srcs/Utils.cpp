@@ -11,6 +11,8 @@ void finalizeResponseHeaders(Response& res)
         ss << res.body.size();
         res.headers["Content-Length"] = ss.str();
     }
+
+    res.headers["Connection"] = "close";
 }
 bool isMethodAllowed(const Location* loc, const std::string& method)
 {

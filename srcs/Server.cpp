@@ -211,8 +211,16 @@ void Server::handleClientRead(size_t i)
     char buffer[BUFFER_SIZE];
 
     int bytes = recv(fd, buffer, sizeof(buffer), 0);
-    if (bytes <= 0)
+    if (bytes < 0)
         return;
+
+    if (bytes == 0)
+    {
+        close(fd);
+        _clients.erase(fd);
+        _fds.erase(_fds.begin() + i);
+        return;
+    }
 
     Client& client = _clients[fd];
     client.appendToBuffer(std::string(buffer, bytes));
