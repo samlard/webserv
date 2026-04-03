@@ -9,6 +9,7 @@ static const char* getReasonPhrase(int statusCode)
     {
         case 200: return "OK";
         case 201: return "Created";
+        case 301: return "Moved Permanently";
         case 400: return "Bad Request";
         case 403: return "Forbidden";
         case 404: return "Not Found";

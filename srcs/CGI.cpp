@@ -275,6 +275,15 @@ Response Server::handleGet(const Request& req, const ServerConfig& config, Locat
     struct stat st;
     if (stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
     {
+        // If URI doesn't end with '/', redirect to the canonical directory URL
+        if (uri.empty() || uri[uri.size() - 1] != '/')
+        {
+            res.statusCode = 301;
+            res.headers["Location"] = uri + "/";
+            res.body = "";
+            return res;
+        }
+
         std::string indexPath = path;
         if (!index.empty())
         {
