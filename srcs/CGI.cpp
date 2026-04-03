@@ -105,7 +105,6 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
 
     if (pid == 0)
     {
-        // chdir to script directory for relative path file access
         std::string scriptName = scriptPath;
         std::string dir = scriptPath;
         size_t lastSlash = dir.rfind('/');
@@ -139,7 +138,6 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
         std::string contentType = "CONTENT_TYPE=" + contentTypeValue;
         std::string scriptFilename = "SCRIPT_FILENAME=" + scriptPath;
 
-        // Get PATH from parent environment so shebangs with /usr/bin/env work
         std::string pathEnv = "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
         const char* parentPath = getenv("PATH");
         if (parentPath)
@@ -155,7 +153,6 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
         envp[6] = const_cast<char*>(pathEnv.c_str());
         envp[7] = NULL;
 
-        // Use script filename (not full path) since we chdir'd to script dir
         std::string dotSlashScript = "./" + scriptName;
 
         if (!loc->cgi_path.empty())
@@ -178,17 +175,14 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
         _exit(1);
     }
 
-    // Parent process
     close(outPipe[1]);
     close(inPipe[0]);
 
-    // Set pipes non-blocking for poll-based I/O
     fcntl(inPipe[1], F_SETFL, O_NONBLOCK);
     fcntl(outPipe[0], F_SETFL, O_NONBLOCK);
 
     time_t startTime = time(NULL);
 
-    // Write request body to CGI stdin using poll()
     if (!req.body.empty())
     {
         size_t written = 0;
@@ -224,7 +218,6 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
     }
     close(inPipe[1]);
 
-    // Read CGI output using poll()
     char buffer[4096];
     std::string output;
 
@@ -252,7 +245,6 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
             continue;
         if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL))
         {
-            // Try one last read before breaking
             ssize_t bytes = read(outPipe[0], buffer, sizeof(buffer));
             if (bytes > 0)
                 output.append(buffer, bytes);
@@ -325,16 +317,13 @@ Response Server::executeCgi(const Request& req, const std::string& scriptPath, L
         res.headers.erase("Status");
     }
     else
-    {
         res.statusCode = 200;
-    }
 
     res.body = bodyPart;
 
     std::stringstream ss;
     ss << res.body.size();
     res.headers["Content-Length"] = ss.str();
-
     return res;
 }
 
@@ -348,10 +337,8 @@ Response Server::handleGet(const Request& req, const ServerConfig& config, Locat
 
     std::cout << "Requested URI: " << uri << std::endl;
 
-    // If URI is root, serve the configured index file.
-    if (uri == "/" && !index.empty()) {
+    if (uri == "/" && !index.empty()) 
         uri = "/" + index;
-    }
 
     std::string path = buildPathFromLocation(uri, root, loc);
 
@@ -367,7 +354,6 @@ Response Server::handleGet(const Request& req, const ServerConfig& config, Locat
     struct stat st;
     if (stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
     {
-        // If URI doesn't end with '/', redirect to the canonical directory URL
         if (uri.empty() || uri[uri.size() - 1] != '/')
         {
             res.statusCode = 301;
@@ -425,7 +411,6 @@ Response Server::handleGet(const Request& req, const ServerConfig& config, Locat
     ss << res.body.size();
     res.headers["Content-Length"] = ss.str();
     res.headers["Content-Type"] = getMimeType(path);
-
     return res;
 }
 
@@ -441,7 +426,6 @@ Response Server::handlePost(const Request& req, const ServerConfig& config, Loca
         std::cout << "[CGI] POST detected as CGI for uri=" << uri << std::endl;
         return executeCgi(req, path, loc);
     }
-
     if (!loc->upload_path.empty())
     {
         static unsigned long uploadCounter = 0;
@@ -460,10 +444,8 @@ Response Server::handlePost(const Request& req, const ServerConfig& config, Loca
             res.body = "Upload failed";
             return res;
         }
-
         out << req.body;
         out.close();
-
         res.statusCode = 201;
         res.body = "Created";
         return res;
@@ -500,7 +482,6 @@ Location* Server::matchLocation(const ServerConfig& config, const std::string& u
 {
     Location* bestMatch = NULL;
     size_t bestLen = 0;
-    // std::cout << uri << std::endl;
     std::string cleanUri = stripUriSuffix(uri);
 
     if (cleanUri.empty())
@@ -546,8 +527,6 @@ bool Server::isCgiRequest(const std::string& path, Location* loc)
 
     if (!cleanPath.empty() && cleanPath[cleanPath.size() - 1] == '/')
         cleanPath.erase(cleanPath.size() - 1);
-
-    // Check if path ends with any of the configured CGI extensions
     for (size_t i = 0; i < loc->cgi_extensions.size(); ++i) {
         const std::string& ext = loc->cgi_extensions[i];
         if (cleanPath.size() >= ext.size()) {

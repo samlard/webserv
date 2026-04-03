@@ -1,4 +1,4 @@
-#include "Request.hpp"
+#include "../includes/Request.hpp"
 #include <cstring>
 #include "../includes/Server.hpp"
 
@@ -44,13 +44,11 @@ void Server::parseRequest(Client& client)
     std::istringstream stream(raw);
     std::string line;
 
-    // Request line
     std::getline(stream, line);
 
     std::istringstream requestLine(line);
     requestLine >> req.method >> req.uri >> req.version;
 
-    // Headers
     while (std::getline(stream, line) && line != "\r") {
 
         size_t pos = line.find(":");
@@ -61,7 +59,6 @@ void Server::parseRequest(Client& client)
         std::string key = line.substr(0, pos);
         std::string value = line.substr(pos + 1);
 
-        // Trim leading whitespace (space after colon is optional per RFC 7230)
         while (!value.empty() && (value[0] == ' ' || value[0] == '\t'))
             value.erase(0, 1);
 

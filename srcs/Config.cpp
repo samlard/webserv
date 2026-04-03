@@ -63,42 +63,32 @@ int Config::fill_location(std::istringstream &iss, Location &loc, std::string &e
     while (std::getline(iss, line)) {
         std::string trimmed = trim(line);
         
-        // Fin du bloc
         if (trimmed == "}" || trimmed.find("}") != std::string::npos)
             break;
-        
-        // Skip vide et commentaires
+
         if (trimmed.empty() || trimmed[0] == '#')
             continue;
         
-        // Vérifie le ; final
         if (trimmed[trimmed.length() - 1] != ';') {
             error = "Missing semicolon in location " + loc.path + ": '" + trimmed + "'";
             return 1;
         }
         
-        // Enlève le ;
         std::string noSemi = trimmed.substr(0, trimmed.length() - 1);
         
-        // Sépare key et value
         std::istringstream lineIss(noSemi);
         std::string key;
         lineIss >> key;
-        
-        // Vérifie directive valide
+
         if (!is_valid_location_directive(key)) {
             error = "Unknown directive '" + key + "' in location " + loc.path;
             return 1;
         }
-        
-        // Récupère la valeur
+    
         std::string value;
         std::getline(lineIss, value);
         value = trim(value);
         
-        // ========== REMPLISSAGE OBLIGATOIRE 42 ==========
-        
-        // root : path
         if (key == "root") {
             if (value.empty()) {
                 error = "root requires a path in location " + loc.path;
@@ -106,18 +96,15 @@ int Config::fill_location(std::istringstream &iss, Location &loc, std::string &e
             }
             loc.root = value;
         }
-        
-        // index : fichier
         else if (key == "index") {
             if (value.empty()) {
                 error = "index requires a filename in location " + loc.path;
                 return 1;
             }
             loc.index = value;
-        }
-        
-        // allow_methods : GET POST DELETE uniquement
-        else if (key == "allow_methods" || key == "methods") {
+        }   
+        else if (key == "allow_methods" || key == "methods") 
+        {
             if (value.empty()) {
                 error = "allow_methods requires at least one method in location " + loc.path;
                 return 1;
@@ -133,52 +120,56 @@ int Config::fill_location(std::istringstream &iss, Location &loc, std::string &e
             }
         }
         
-        // autoindex : on ou off uniquement
-        else if (key == "autoindex") {
+        else if (key == "autoindex") 
+        {
             if (value != "on" && value != "off") {
                 error = "autoindex must be 'on' or 'off' in location " + loc.path + ", found: " + value;
                 return 1;
             }
             loc.autoindex = (value == "on");
         }
-        
-        // cgi_extension : doit commencer par .
-        else if (key == "cgi_extension") {
+        else if (key == "cgi_extension") 
+        {
             std::istringstream extStream(value);
             std::string ext;
-            while (extStream >> ext) {
-                if (ext.empty()) {
+            while (extStream >> ext) 
+            {
+                if (ext.empty())
                     continue;
-                }
-                if (ext[0] != '.') {
+                if (ext[0] != '.')
+                {
                     error = "cgi_extension must start with '.', found: " + ext + " in location " + loc.path;
                     return 1;
                 }
                 loc.cgi_extensions.push_back(ext);
             }
-            if (loc.cgi_extensions.empty()) {
+            if (loc.cgi_extensions.empty()) 
+            {
                 error = "cgi_extension requires at least one extension in location " + loc.path;
                 return 1;
             }
         }
         
-        // cgi_path : path exécutable
-        else if (key == "cgi_path") {
+        else if (key == "cgi_path") 
+        {
             if (value.empty()) {
                 error = "cgi_path requires a path in location " + loc.path;
                 return 1;
             }
             loc.cgi_path = value;
         }
-        else if (key == "upload_path") {
+        else if (key == "upload_path") 
+        {
             if (value.empty()) {
                 error = "upload_path requires a path in location " + loc.path;
                 return 1;
             }
             loc.upload_path = value;
         }
-        else if (key == "return") {
-            if (value.empty()) {
+        else if (key == "return") 
+        {
+            if (value.empty()) 
+            {
                 error = "return requires a URL or status code + URL in location " + loc.path;
                 return 1;
             }
@@ -200,7 +191,6 @@ int Config::fill_server(std::string &ServerBlock, std::string &error)
     std::istringstream iss(ServerBlock);
     std::string line;
 
-    // Skip la première ligne "server {"
     std::getline(iss, line);
 
     while (std::getline(iss, line)) {
@@ -208,43 +198,39 @@ int Config::fill_server(std::string &ServerBlock, std::string &error)
         if (trimmed.empty() || trimmed[0] == '#')
             continue;
 
-        // Fin du bloc serveur
         if (trimmed == "}" || trimmed.find("}") != std::string::npos)
             break;
 
-        // ======= Gestion des locations =======
-        if (trimmed.find("location") == 0) {
+        if (trimmed.find("location") == 0) 
+        {
             Location loc;
-
-            // Construit tout le bloc location
             std::string locBlock = trimmed + "\n";
             std::string locLine;
             int braceCount = 0;
 
-            // Compte les { de la ligne de départ
             for (size_t i = 0; i < trimmed.size(); i++)
                 if (trimmed[i] == '{') braceCount++;
 
-            // Lit toutes les lignes jusqu'à équilibrage des accolades
-            while (braceCount > 0 && std::getline(iss, locLine)) {
+            while (braceCount > 0 && std::getline(iss, locLine)) 
+            {
                 locBlock += locLine + "\n";
-                for (size_t i = 0; i < locLine.size(); i++) {
-                    if (locLine[i] == '{') braceCount++;
-                    else if (locLine[i] == '}') braceCount--;
+                for (size_t i = 0; i < locLine.size(); i++) 
+                {
+                    if (locLine[i] == '{') 
+                        braceCount++;
+                    else if (locLine[i] == '}') 
+                        braceCount--;
                 }
             }
-
             std::istringstream locStream(locBlock);
-            if (fill_location(locStream, loc, error) != 0) {
+            if (fill_location(locStream, loc, error) != 0)
                 return 1;
-            }
-
             serv.locations.push_back(loc);
             continue;
         }
 
-        // ======= Directives serveur =======
-        if (trimmed[trimmed.length() - 1] != ';') {
+        if (trimmed[trimmed.length() - 1] != ';') 
+        {
             error = "Missing semicolon: '" + trimmed + "'";
             return 1;
         }
@@ -258,78 +244,90 @@ int Config::fill_server(std::string &ServerBlock, std::string &error)
         std::getline(lineIss, value);
         value = trim(value);
 
-        if (!is_valid_server_directive(key)) {
+        if (!is_valid_server_directive(key)) 
+        {
             error = "Unknown directive '" + key + "' in server block";
             return 1;
         }
 
-        if (key == "listen") {
+        if (key == "listen") 
+        {
             if (_listen == true)
             {
                 error = "cant have multiple listen in same serv";
                 return 1;
             }
             _listen = true;
-            if (value.empty()) {
+            if (value.empty()) 
+            {
                 error = "listen requires a port number";
                 return 1;
             }
-            for (size_t i = 0; i < value.length(); i++) {
-                if (!isdigit(value[i])) {
+            for (size_t i = 0; i < value.length(); i++) 
+            {
+                if (!isdigit(value[i])) 
+                {
                     error = "listen must be a number, found: '" + value + "'";
                     return 1;
                 }
             }
             int port = atoi(value.c_str());
-            if (port < 1 || port > 65535) {
+            if (port < 1 || port > 65535) 
+            {
                 error = "listen port out of range (1-65535): '" + value + "'";
                 return 1;
             }
             serv.port = port;
-        } else if (key == "host") {
+        }
+        else if (key == "host")
             serv.host = value;
-        } else if (key == "server_name") {
+        else if (key == "server_name")
             serv.server_names.push_back(value);
-        } else if (key == "root") {
+        else if (key == "root")
             serv.root = value;
-        } else if (key == "index") {
+        else if (key == "index")
             serv.index = value;
-        } else if (key == "client_max_body_size") {
+        else if (key == "client_max_body_size") 
+        {
             if (value.empty()) {
                 error = "client_max_body_size requires a numeric value";
                 return 1;
             }
-            for (size_t i = 0; i < value.length(); i++) {
-                if (!isdigit(value[i])) {
+            for (size_t i = 0; i < value.length(); i++) 
+            {
+                if (!isdigit(value[i])) 
+                {
                     error = "client_max_body_size must be a number, found: '" + value + "'";
                     return 1;
                 }
             }
             serv.client_max_body_size = static_cast<size_t>(atoi(value.c_str()));
-        } else if (key == "error_page") {
+        } 
+        else if (key == "error_page") 
+        {
             std::istringstream epIss(value);
             int code;
             std::string page;
-            if (epIss >> code >> page) {
+            if (epIss >> code >> page) 
                 serv.error_pages[code] = page;
-            } else {
+            else 
+            {
                 error = "error_page requires a status code and a path";
                 return 1;
             }
         }
     }
-
-    // Validation finale
-    if (serv.port == 0) {
+    if (serv.port == 0) 
+    {
         error = "Missing 'listen' directive in server block";
         return 1;
     }
-
     _servers.push_back(serv);
     return 0;
 }
 
-int Config::parseFile(const std::string& filename) {
+int Config::parseFile(const std::string& filename) 
+{
     std::ifstream file(filename.c_str());
     if (!file.is_open()) {
         _errorMsg = "Cannot open file: " + filename;
@@ -339,11 +337,13 @@ int Config::parseFile(const std::string& filename) {
     std::string currentBlock;
     bool inServer = false;
     int braceCount = 0;
-    
-    while (std::getline(file, line)) {
-        if (!inServer) {
+    while (std::getline(file, line))
+    {
+        if (!inServer) 
+        {
             std::string trimmed = trim(line);
-            if (trimmed.find("server") == 0 && trimmed.find("{") != std::string::npos) {
+            if (trimmed.find("server") == 0 && trimmed.find("{") != std::string::npos) 
+            {
                 inServer = true;
                 braceCount = 1;
                 currentBlock = line + "\n";
@@ -351,39 +351,39 @@ int Config::parseFile(const std::string& filename) {
             continue;
         }
         currentBlock += line + "\n";
-
-        for (size_t i = 0; i < line.length(); i++) {
+        for (size_t i = 0; i < line.length(); i++) 
+        {
             if (line[i] == '{') braceCount++;
             else if (line[i] == '}') braceCount--;
         }
 
-        if (braceCount == 0) {
+        if (braceCount == 0) 
+        {
             std::string error;
-            std::cout << currentBlock << std::endl;
-            if (fill_server(currentBlock, error) == 0) {
+            if (fill_server(currentBlock, error) == 0)
                 std::cout << "Server added\n";
-            } else {
+            else
                 std::cout << "Server skipped: " << error << "\n";
-            }
             inServer = false;
             currentBlock.clear();
         }
     }
-    
-    if (braceCount != 0) {
+    if (braceCount != 0) 
+    {
         _errorMsg = "Problem with brackets";
         return 1;
     }
-
-    if (_servers.empty()) {
+    if (_servers.empty()) 
+    {
         _errorMsg = "No valid server found";
         return 1;
     }
-
-    // Check for duplicate port configurations
-    for (size_t i = 0; i < _servers.size(); i++) {
-        for (size_t j = i + 1; j < _servers.size(); j++) {
-            if (_servers[i].port == _servers[j].port && _servers[i].host == _servers[j].host) {
+    for (size_t i = 0; i < _servers.size(); i++) 
+    {
+        for (size_t j = i + 1; j < _servers.size(); j++) 
+        {
+            if (_servers[i].port == _servers[j].port && _servers[i].host == _servers[j].host) 
+            {
                 std::stringstream ss;
                 ss << "Duplicate server on " << _servers[i].host << ":" << _servers[i].port;
                 _errorMsg = ss.str();
@@ -391,7 +391,6 @@ int Config::parseFile(const std::string& filename) {
             }
         }
     }
-
     return 0;
 }
 

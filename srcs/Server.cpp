@@ -21,7 +21,8 @@ void Server::shutdown(){
 }
 
 
-int Server::findServerIndex(int listenSocket) const {
+int Server::findServerIndex(int listenSocket) const 
+{
     for (size_t i = 0; i < _listenSockets.size(); i++) {
         if (_listenSockets[i] == listenSocket) {
             return (int)i;
@@ -158,8 +159,6 @@ void Server::run()
                     break;
                 }
             }
-
-            // Handle errors first
             if (revents & (POLLERR | POLLHUP | POLLNVAL))
             {
                 if (!isListenSocket)
@@ -170,15 +169,11 @@ void Server::run()
                 }
                 continue;
             }
-
-            // Accept new connections
             if (isListenSocket && (revents & POLLIN))
             {
                 acceptNewClient(fd);
                 continue;
             }
-
-            // One read OR one write per client per poll() - never both
             if (!isListenSocket && (revents & POLLIN))
             {
                 handleClientRead(i);
@@ -203,7 +198,6 @@ void Server::handleClientRead(size_t i)
 
     ssize_t bytes = recv(fd, buffer, sizeof(buffer), 0);
 
-    // recv returned 0 (client disconnected) or -1 (error): remove client
     if (bytes <= 0)
     {
         close(fd);
@@ -224,7 +218,6 @@ void Server::handleClientRead(size_t i)
         client.getResponse() = res;
         client.prepareResponse();
 
-        // Switch from POLLIN to POLLOUT only
         for (size_t j = 0; j < _fds.size(); ++j)
         {
             if (_fds[j].fd == fd)
@@ -253,7 +246,6 @@ void Server::handleClientWrite(size_t i)
 
     ssize_t sent = send(fd, responseStr.c_str() + client.getSendOffset(), remaining, 0);
 
-    // send returned -1 (error) or 0: remove client
     if (sent <= 0)
     {
         close(fd);
@@ -264,21 +256,18 @@ void Server::handleClientWrite(size_t i)
 
     client.advanceSendOffset(static_cast<size_t>(sent));
 
-    // If all data sent, close connection
     if (client.isSendComplete())
     {
         close(fd);
         _clients.erase(fd);
         _fds.erase(_fds.begin() + i);
     }
-    // Otherwise POLLOUT stays active, will send more next iteration
 }
 
 void Server::acceptNewClient(int listenSocket) {
     sockaddr_in clientAddr;
     socklen_t addrLen = sizeof(clientAddr);
     
-    // Accepte la connexion sur le socket spécifique
     int clientFd = accept(listenSocket, (sockaddr*)&clientAddr, &addrLen);
     if (clientFd < 0) {
         if (errno != EAGAIN && errno != EWOULDBLOCK) {
@@ -287,7 +276,6 @@ void Server::acceptNewClient(int listenSocket) {
         return;
     }
     
-    // Rend non-bloquant
     if (fcntl(clientFd, F_SETFL, O_NONBLOCK) < 0)
     {
         perror("fcntl");
@@ -295,7 +283,6 @@ void Server::acceptNewClient(int listenSocket) {
         return;
     }
     
-    // Trouve l'index du serveur correspondant
     int serverIndex = findServerIndex(listenSocket);
     if (serverIndex == -1) {
         std::cerr << "Error: Could not find server for socket " << listenSocket << std::endl;
@@ -303,10 +290,8 @@ void Server::acceptNewClient(int listenSocket) {
         return;
     }
     
-    // Crée le client avec son fd et l'index du serveur
     _clients[clientFd] = Client(clientFd, serverIndex);
     
-    // Ajoute à poll pour surveillance
     pollfd pfd;
     pfd.fd = clientFd;
     pfd.events = POLLIN;

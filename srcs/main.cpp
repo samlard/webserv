@@ -4,7 +4,8 @@
 
 Server* g_server = NULL;
 
-void signalHandler(int signum) {
+void signalHandler(int signum) 
+{
 	(void)signum;
 	if (g_server) {
 		std::cout << "\nShutting down server..." << std::endl;
@@ -24,7 +25,6 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 	
-	// Create and initialize server
 	Server server;
 	g_server = &server;
 	
@@ -33,11 +33,9 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 	
-	// Set up signal handlers
 	signal(SIGINT, signalHandler);
 	signal(SIGTERM, signalHandler);
 	
-	// Run server
 	std::cout << "Server started successfully" << std::endl;
 	server.run();
 	

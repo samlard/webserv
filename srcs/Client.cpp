@@ -1,4 +1,4 @@
-#include "Client.hpp"
+#include "../includes/Client.hpp"
 
 Client::Client() : _fd(-1), _serverIndex(-1), _requestComplete(false), _sendOffset(0) {}
 

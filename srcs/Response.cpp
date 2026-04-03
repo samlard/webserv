@@ -1,4 +1,4 @@
-#include "Response.hpp"
+#include "../includes/Response.hpp"
 #include <sstream>
 #include <fstream>
 #include "../includes/Server.hpp"
@@ -83,7 +83,6 @@ Response Server::buildResponse(Client& client)
         return applyErrorPage(res, config);
     }
 
-    // Check for redirect (return directive)
     if (loc && !loc->redirect.empty())
     {
         Response res;
