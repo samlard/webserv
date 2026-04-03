@@ -125,7 +125,7 @@ int Config::fill_location(std::istringstream &iss, Location &loc, std::string &e
             std::istringstream m(value);
             std::string method;
             while (m >> method) {
-                if (method != "GET" && method != "POST" && method != "DELETE") {
+                if (method != "GET" && method != "POST" && method != "DELETE" && method != "HEAD") {
                     error = "Invalid method '" + method + "' in location " + loc.path;
                     return 1;
                 }
