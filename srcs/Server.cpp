@@ -162,7 +162,8 @@ void Server::run()
 
             if (!isListenSocket && (revents & POLLIN))
             {
-                handleClientRead(i);
+                if (!handleClientRead(i))
+                    continue;
             }
 
             if (!isListenSocket && (_fds[i].revents & POLLOUT))
@@ -205,21 +206,21 @@ void Server::run()
 
 
 
-void Server::handleClientRead(size_t i)
+bool Server::handleClientRead(size_t i)
 {
     int fd = _fds[i].fd;
     char buffer[BUFFER_SIZE];
 
     int bytes = recv(fd, buffer, sizeof(buffer), 0);
     if (bytes < 0)
-        return;
+        return true;
 
     if (bytes == 0)
     {
         close(fd);
         _clients.erase(fd);
         _fds.erase(_fds.begin() + i);
-        return;
+        return false;
     }
 
     Client& client = _clients[fd];
@@ -242,6 +243,7 @@ void Server::handleClientRead(size_t i)
             }
         }
     }
+    return true;
 }
 
 void Server::acceptNewClient(int listenSocket) {

@@ -32,7 +32,7 @@ public:
     void shutdown();
     int init(Config &config);
     void run();
-    void handleClientRead(size_t i);
+    bool handleClientRead(size_t i);
     void acceptNewClient(int listenSocket);
     int findServerIndex(int listenSocket) const;
     void parseRequest(Client& client);
